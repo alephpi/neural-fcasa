@@ -1,19 +1,13 @@
-#! /usr/bin/env python3
-
+#!/usr/bin/env python3
 from argparse import ArgumentParser
 from functools import partial
+import multiprocessing
 import os
 from pathlib import Path
-
-from progressbar import progressbar as pbar
-
+from tqdm import tqdm  # 替换 progressbar
 import numpy as np
-
 from config import data_split, dataset_path
-from mpi4py.futures import MPIPoolExecutor
-
 import soundfile as sf
-
 
 def split_data_one(scenario_path, duration, stepsize, dst_path):
     scenario = scenario_path.name
@@ -44,14 +38,20 @@ def split_data(args, unk_args):
     for scenario_basename in data_split[args.mode]:
         scenario_path_list += list(dataset_path.glob(f"{scenario_basename}*"))
 
-    dst_path = Path(f"./{args.mode}") / "mix"
+    dst_path = Path(f"./processed_data/{args.mode}") / "mix"
     dst_path.mkdir(parents=True, exist_ok=True)
 
-    with MPIPoolExecutor() as pool:
-        func = partial(split_data_one, duration=args.duration, stepsize=args.stepsize, dst_path=dst_path)
-        for _ in pbar(pool.map(func, scenario_path_list), max_value=len(scenario_path_list)):
-            pass
+    num_cores = os.cpu_count()
 
+    # 使用 tqdm 替换 progressbar
+    with multiprocessing.Pool(processes=num_cores) as pool:
+        func = partial(split_data_one, duration=args.duration, stepsize=args.stepsize, dst_path=dst_path)
+
+        # 使用 tqdm 包装 pool.imap
+        list(tqdm(pool.imap(func, scenario_path_list), 
+                  total=len(scenario_path_list), 
+                  desc='Processing scenarios', 
+                  unit='scenario'))
 
 def submit_jobs(args, unk_args):
     script_path = Path(__file__)
@@ -63,24 +63,28 @@ def submit_jobs(args, unk_args):
     job_path.mkdir(parents=True, exist_ok=True)
     out_path.mkdir(parents=True, exist_ok=True)
 
-    with open(f"{dataset_path}/scripts/job_template.sh") as f:
+    with open(f"{dataset_path}/scripts/slurm_job_template.sh") as f:
         job_template = f.read()
 
     for mode in ["tr", "cv", "tt"]:
         filename_job = job_path / f"{mode}.sh"
         filename_stdout = out_path / f"{mode}.out"
+        filename_stderr = out_path / f"{mode}.err"
 
         with open(filename_job, "w") as f:
             f.write(job_template)
-
-            f.write("mpirun -np 40 -npernode 10 --hostfile $SGE_JOB_HOSTLIST ")
-            f.write("-mca pml ob1 -mca btl self,tcp -mca btl_tcp_if_include bond0 ")
-            f.write(f"singularity exec --nv {dataset_path}/../singularity/singularity.sif direnv exec . ")
-            f.write(f" python -m mpi4py.futures ./scripts/{command_name}.py job --mode {mode} ")
+            f.write(f"#SBATCH --output={filename_stdout}\n")
+            f.write(f"#SBATCH --error={filename_stderr}\n")
+            f.write("#SBATCH --nodes=1\n")  # 单节点
+            f.write("#SBATCH --ntasks=1\n")  # 单任务
+            f.write("#SBATCH --cpus-per-task=40\n")  # 使用40个CPU核心
+            f.write("#SBATCH --partition=CPU\n")  # 使用40个CPU核心
+            f.write("#SBATCH --time=3:00:00\n")
+            # 直接运行Python脚本
+            f.write(f"srun python ./scripts/{command_name}.py job --mode {mode} ")
             f.write(" ".join(unk_args) + "\n")
 
-        os.system(f"qsub -g $JOB_GROUP $QSUB_ARGS -l rt_F=4 -l h_rt=3:0:0 -o {filename_stdout} {filename_job}")
-
+        os.system(f"sbatch {filename_job}")
 
 def main():
     parser = ArgumentParser()

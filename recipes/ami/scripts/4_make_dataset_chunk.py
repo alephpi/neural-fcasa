@@ -1,93 +1,82 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser
+from functools import partial
 from math import ceil, floor
 import os
 from pathlib import Path
 
-from progressbar import ProgressBar
-
 import numpy as np
 import pandas as pd
-
 import soundfile as sf
 
+from multiprocessing import Pool
+from tqdm import tqdm
+import h5py
 
 class EmptySample(Exception):
     pass
 
+def process_one_file(wav_fname, mode_path, args):
+    try:
+        if wav_fname is None:
+            raise EmptySample()
+
+        # 加载音频文件
+        wav, sr = sf.read(wav_fname, dtype=np.float32)
+        duration, n_mic = wav.shape
+
+        # 加载对应的CSV文件
+        csv_fname = mode_path / "act" / f"{wav_fname.stem}.csv"
+        if not csv_fname.exists():
+            raise EmptySample()
+
+        df = pd.read_csv(csv_fname, names=("transcriber_start", "transcriber_end", "speaker_idx"))
+
+        # 生成活动矩阵
+        # 默认label resolution 为 10ms
+        label_resolution = 16000 / args.hop_length
+        # 至多有5名说话人
+        act = np.zeros([5, duration // args.hop_length], dtype=np.float32)
+        for _, (start, end, spk) in df.iterrows():
+            act[int(spk), floor(start * label_resolution) : ceil(end * label_resolution)] = 1
+
+        return wav_fname.stem, wav, act, duration, n_mic
+    except Exception as e:
+        print(f"Error processing {wav_fname}: {e}")
+        return None
 
 def make_dataset(args, unk_args):
-    import h5py
-    from mpi4py import MPI
+    mode_path = Path(f"./processed_data/{args.mode}/")
 
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    size = comm.Get_size()
+    print("================================")
+    print("Parameters")
+    print("--------------------------------")
+    for key, val in args.__dict__.items():
+        print(f"{key:20s}: {val}")
+    print("================================")
 
-    mode_path = Path(f"./{args.mode}/")
-
-    if rank == 0:
-        print("================================")
-        print("Parameters")
-        print("--------------------------------")
-        for key, val in args.__dict__.items():
-            print(f"{key:20s}: {val}")
-        print("================================")
-
-    # obtain file list
+    # 获取文件列表
     print("init")
-    if rank == 0:
-        wav_fname_list = sorted((mode_path / args.data).glob("*.wav"))
+    wav_fname_list = sorted((mode_path / args.data).glob("*.wav"))
 
-        n_fname = len(wav_fname_list)
-        wav_fname_list += (ceil(n_fname / size) * size - n_fname) * [None]
-    else:
-        wav_fname_list = None
-    wav_fname_list = comm.bcast(wav_fname_list, root=0)
+    os.makedirs("./processed_data/hdf5", exist_ok=True)
+    hdf_name = f"./processed_data/hdf5/chunk.{args.data}-hop{args.hop_length}-{args.mode}.hdf5"
+    n_cpus = 8
+    func = partial(process_one_file, mode_path=mode_path, args=args)
 
-    label_resolution = 16000 / args.hop_length
+    with h5py.File(hdf_name, "w") as f:
+        with Pool(processes=n_cpus) as pool:
+            for result in tqdm(pool.imap(func, wav_fname_list), total=len(wav_fname_list), desc="Processing files"):
+                if result is None:
+                    continue
+                grp_name, wav, act, duration, n_mic = result
+                g = f.create_group(grp_name)
+                g.create_dataset("wav", [n_mic, duration], "float32")
+                g.create_dataset("act", [5, duration // args.hop_length], "float32")
 
-    hdf_name = f"hdf5/chunk.{args.data}-hop{args.hop_length}-{args.mode}.hdf5"
-    with h5py.File(hdf_name, "w", driver="mpio", comm=comm) as f:
-        pbar = ProgressBar(redirect_stdout=True) if rank == 0 else lambda x: x
-        for widx, wav_fname in enumerate(pbar(wav_fname_list[rank::size])):
-            try:
-                if wav_fname is None:
-                    raise EmptySample()
-
-                # load spectrogram
-                wav, sr = sf.read(wav_fname, dtype=np.float32)
-                duration, n_mic = wav.shape
-
-                csv_fname = mode_path / "act" / f"{wav_fname.stem}.csv"
-                if not csv_fname.exists():
-                    raise EmptySample()
-
-                df = pd.read_csv(csv_fname, names=("transcriber_start", "transcriber_end", "speaker_idx"))
-
-                act = np.zeros([5, duration // args.hop_length], dtype=np.float32)
-                for _, (start, end, spk) in df.iterrows():
-                    act[int(spk), floor(start * label_resolution) : ceil(end * label_resolution)] = 1
-
-                grp_name = f"{size*widx + rank:08d}"
-            except EmptySample:
-                grp_name, duration = None, None
-            except Exception as e:
-                print(f"Error!!!: {wav_fname} has error: {e}.")
-                grp_name, duration = None, None
-
-            all_grp_names = filter(None, comm.allgather(grp_name))
-            all_durations = filter(None, comm.allgather(duration))
-            for grp_name_, duration_ in zip(all_grp_names, all_durations, strict=False):
-                g = f.create_group(grp_name_)
-                g.create_dataset("wav", [n_mic, duration_], "float32")
-                g.create_dataset("act", [5, duration_ // args.hop_length], "float32")
-
-            # store data
-            if grp_name is not None:
-                f[f"{grp_name}/wav"][:] = wav.T  # type: ignore
-                f[f"{grp_name}/act"][:] = act  # type: ignore
+                f[f"{grp_name}/wav"][:] = wav.T
+                f[f"{grp_name}/act"][:] = act
 
 
 def submit_jobs(args, unk_args):
@@ -109,15 +98,10 @@ def submit_jobs(args, unk_args):
 
         with open(fname_job, "w") as f:
             f.write(job_template)
-
-            f.write("mpirun -np 160 -npernode 40 --hostfile $SGE_JOB_HOSTLIST ")
-            f.write("-mca pml ob1 -mca btl self,tcp -mca btl_tcp_if_include bond0 ")
-            f.write(f"singularity exec --nv {dataset_path}/../singularity/singularity.sif direnv exec . ")
-            f.write(f" python ./scripts/{command_name}.py gen --mode {mode} ")
+            f.write(f"python ./scripts/{command_name}.py gen --mode {mode} ")
             f.write(" ".join(unk_args) + "\n")
 
         os.system(f"qsub -g $JOB_GROUP $QSUB_ARGS -l rt_F=4 -l h_rt=1:0:0 -o {fname_stdout} {fname_job}")
-
 
 def main():
     parser = ArgumentParser()
@@ -137,7 +121,6 @@ def main():
         args.handler(args, unk_args)
     else:
         parser.print_help()
-
 
 if __name__ == "__main__":
     main()
