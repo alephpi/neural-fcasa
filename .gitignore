@@ -164,3 +164,6 @@ cython_debug/
 ami_public_manual
 amicorpus
 processed_data
+
+recipes/ami/hdf5
+recipes/ami/tt
