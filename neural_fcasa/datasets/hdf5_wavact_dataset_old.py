@@ -8,41 +8,11 @@ import torch
 
 from aiaccel.torch.datasets import CachedDataset, HDF5Dataset
 
-import os
-import h5py
-import torch
-import numpy as np
-from pathlib import Path
-from typing import Union
-
-class CombinedHDF5Dataset(torch.utils.data.Dataset):
-    def __init__(self, dataset_paths):
-        self.datasets = []
-        self.lengths = []
-        total = 0
-        for path in dataset_paths:
-            dataset = HDF5Dataset(path)
-            self.datasets.append(dataset)
-            l = len(dataset)
-            total += l
-            self.lengths.append(total)
-        self.total_length = total
-
-    def __len__(self):
-        return self.total_length
-
-    def __getitem__(self, idx):
-        for i, l in enumerate(self.lengths):
-            if idx < l:
-                dataset = self.datasets[i]
-                prev_len = 0 if i == 0 else self.lengths[i - 1]
-                return dataset[idx - prev_len]
-        raise IndexError("Index out of range")
 
 class HDF5WavActDataset(torch.utils.data.Dataset):
     def __init__(
         self,
-        dataset_path: Union[Path, str],
+        dataset_path: Path | str,
         duration: int | None = None,
         sr: int | None = None,
         hop_length: int | None = None,
@@ -50,15 +20,8 @@ class HDF5WavActDataset(torch.utils.data.Dataset):
         randperm_spk: bool = True,
     ) -> None:
         super().__init__()
-        dataset_path = Path(dataset_path)
 
-        # split hdf5 dir
-        if dataset_path.is_dir():
-            h5_files = sorted(dataset_path.glob("*.h5"))
-            assert len(h5_files) > 0, f"No .h5 files found in {dataset_path}"
-            self._dataset = CachedDataset(CombinedHDF5Dataset(h5_files))
-        else:
-            self._dataset = CachedDataset(HDF5Dataset(dataset_path))
+        self._dataset = CachedDataset(HDF5Dataset(dataset_path))
 
         self.duration = duration
         self.sr = sr

@@ -11,14 +11,22 @@ dim_latent: 64
 autocast: True
 
 trainer:
+  plugins: null
+  # _target_: lightning.pytorch.trainer.Trainer
+  accelerator: gpu
+  # devices: -1
+  # strategy: ddp
+  # strategy: auto
+  devices: 2
+  strategy: ddp
+  num_nodes: 1
+
   max_epochs: 200
   gradient_clip_val: 5.0
-  sync_batchnorm: True
-
   precision: 16-mixed
-  
   benchmark: True
-  use_distributed_sampler: False
+  sync_batchnorm: True
+  use_distributed_sampler: True
 
   callbacks:
     - _target_: lightning.pytorch.callbacks.ModelCheckpoint
@@ -44,7 +52,8 @@ trainer:
 dataset_name: chunk.derev-hop${hop_length}
 datamodule:
   _target_: neural_fcasa.datamodules.hdf5_wavact_datamodule.DataModule
-  train_dataset_path: ${working_directory}/../../hdf5/${dataset_name}-tr.hdf5
+  # train_dataset_path: ${working_directory}/../../hdf5/${dataset_name}-tr.hdf5
+  train_dataset_path: ${working_directory}/../../hdf5/${dataset_name}-tr.hdf5_split
   val_dataset_path: ${working_directory}/../../hdf5/${dataset_name}-cv.hdf5
   batch_size: 2
   duration: 10
