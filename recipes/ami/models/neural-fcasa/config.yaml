@@ -17,9 +17,9 @@ trainer:
   # devices: -1
   # strategy: ddp
   # strategy: auto
-  devices: 1
+  devices: 2
   strategy: ddp
-  num_nodes: 1
+  num_nodes: 5
 
   max_epochs: 200
   gradient_clip_val: 5.0
@@ -54,7 +54,7 @@ datamodule:
   _target_: neural_fcasa.datamodules.hdf5_wavact_datamodule.DataModule
   train_dataset_path: ${working_directory}/../../processed_data/hdf5/${dataset_name}-tr.hdf5
   val_dataset_path: ${working_directory}/../../processed_data/hdf5/${dataset_name}-cv.hdf5
-  batch_size: 2
+  batch_size: 12
   duration: 10
   sr: ${sr}
   hop_length: ${hop_length}

@@ -164,6 +164,14 @@ cython_debug/
 ami_public_manual
 amicorpus
 processed_data
+recipes/ami/models/neural-fcasa/slurm*
+recipes/ami/models/neural-fcasa/version*
 
-recipes/ami/hdf5
-recipes/ami/tt
+*.dump
+log*
+*.ipynb
+data_sanity_check*
+debug*
+*.wav
+test*
+recipes/ami/jobs*
