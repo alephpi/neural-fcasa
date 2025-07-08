@@ -20,6 +20,7 @@ def main() -> None:
     parser = ArgumentParser()
     parser.add_argument("config", type=Path, help="Config file in YAML format")
     parser.add_argument("--working_directory", type=Path, default=Path.cwd(), help="Working directory")
+    parser.add_argument("--resume_ckpt_dir", type=Path, default=None, help="Path to the dir that stores the checkpoint")
     args, unk_args = parser.parse_known_args()
 
     # load config
@@ -42,10 +43,14 @@ def main() -> None:
     trainer: L.Trainer = instantiate(config.trainer)
     model = instantiate(config.task)
     datamodule = instantiate(config.datamodule)
-    trainer.fit(
-        model=model,
-        datamodule=datamodule,
-    )
+
+    # Resume from checkpoint if provided
+    fit_kwargs = dict(model=model, datamodule=datamodule)
+    if args.resume_ckpt_dir is not None:
+        fit_kwargs["ckpt_path"] = str(args.resume_ckpt_dir)+'/checkpoints/last.ckpt'
+        fit_kwargs["default_root_dir"] = str(args.resume_ckpt_dir)
+
+    trainer.fit(**fit_kwargs)
 
 
 if __name__ == "__main__":

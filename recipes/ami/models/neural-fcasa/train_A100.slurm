@@ -2,14 +2,13 @@
 #SBATCH --job-name=fcasa
 #SBATCH --output=slurm/log/%x_%j.out
 #SBATCH --error=slurm/log/%x_%j.err
-#SBATCH --partition=A40
-#SBATCH --gres=gpu:2
+#SBATCH --partition=A100
+#SBATCH --gres=gpu:3
 #SBATCH --cpus-per-task=20
-#SBATCH --nodes=5
-#SBATCH --exclude=node35
+#SBATCH --nodes=4
 #SBATCH --mem=64G
 #SBATCH --time=24:00:00
-#SBATCH --ntasks-per-node=2
+#SBATCH --ntasks-per-node=3
 
 export MAIN_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
 export MAIN_PORT=$(expr 10000 + $(echo -n $SLURM_JOBID | tail -c 4))
@@ -21,6 +20,6 @@ export MASTER_PORT=${MAIN_PORT}
 
 echo "Job started at: $(date)"
 
-srun python train.py config.yaml --resume_ckpt ./version_16/checkpoints/last.ckpt
+srun python train.py config_A100.yaml
 
 echo "Job finished at: $(date)"
