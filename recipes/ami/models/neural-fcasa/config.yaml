@@ -19,7 +19,7 @@ trainer:
   # strategy: auto
   devices: 2
   strategy: ddp
-  num_nodes: 5
+  num_nodes: 4
 
   max_epochs: 200
   gradient_clip_val: 5.0
