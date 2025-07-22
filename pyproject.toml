@@ -27,7 +27,11 @@ dependencies = [
     "kornia",
     "huggingface_hub",
     "rich",
-    "nara_wpe"
+    "nara_wpe",
+    "pyannote.audio",
+    "pyannote.core",
+    "pyannote.data",
+    "confidence_intervals"
 ]
 
 [project.optional-dependencies]
