@@ -5,60 +5,55 @@ import numpy as np
 import pandas as pd
 import argparse
 
+def diar2rttm(src_dir, dst_dir):
 
-def vad(src_path:str, dst_path:str):
-    from pyannote.audio import Pipeline
-    import torch
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    pipeline = Pipeline.from_pretrained("pyannote/voice-activity-detection",use_auth_token="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")
-    pipeline.segmentation = "pyannote/segmentation-3.0.0"
-    pipeline.to(device)
-    # src_path / separated_dir / wav_file
-    for idx in tqdm(os.listdir(src_path)):
-        print(idx)
-        output_path = os.path.join(dst_path, f"{idx}.rttm")
-        annotations = []
-        for i in range(5):
-            wav_path = os.path.join(src_path, idx, f"{i}.wav")
-            output = pipeline(wav_path)
-            output.uri = idx
-            for segment, track, label in output.itertracks(yield_label=True):
-                if label == "SPEECH":
-                    output[segment, track] = i
-            annotations.append(output)
-        with open(output_path, "w") as f:
-            for ann in annotations:
-                ann.write_rttm(f)
-            
-        # break
-    return
-
-def separate_channel(src_path:str, dst_path:str):
-    """
-    separate the channel of the audio file, and save the separated audio files to the dst_path
-    """
-    import soundfile as sf
-    for file in tqdm(os.listdir(src_path)):
-        if not file.endswith(".wav"):
+    frame_shift = 0.01 # 10ms frame shift
+    
+    os.makedirs(dst_dir, exist_ok=True)
+    
+    for diar in tqdm(os.listdir(src_dir)):
+        if not diar.endswith(".diar"):
             continue
-        tempdir = os.path.join(dst_path, file.replace(".wav", ""))
-        os.makedirs(tempdir, exist_ok=True)
-        file_path = os.path.join(src_path, file)
-        audio, sr = sf.read(file_path)
-        print(audio.shape)
-        for i in range(audio.shape[1]-1):
-            sf.write(os.path.join(tempdir, f"{i}.wav"), audio[:,i], sr)
-    return
+        diar_path = os.path.join(src_dir, diar)
+        # print(diar_path)
+        output_rttm = os.path.join(dst_dir, diar.replace(".diar", ".rttm"))
+        
+        filename = os.path.splitext(diar)[0]
+    
+        with open(diar_path, "rb") as f:
+            mask = pickle.load(f)  # shape: [num_speakers, num_frames]
+            mask = mask[0,:5,:] # last channel is noise channel
+
+        with open(output_rttm, "w") as fout:
+            num_speakers, num_frames = mask.shape
+            for spk in range(num_speakers):
+                active = mask[spk]
+                in_segment = False
+                start_time = 0
+                for i, val in enumerate(active):
+                    if val > 0 and not in_segment:
+                        start_time = i * frame_shift
+                        in_segment = True
+                    elif val == 0 and in_segment:
+                        end_time = i * frame_shift
+                        fout.write(f"SPEAKER {filename} 1 {start_time:.3f} {end_time - start_time:.3f} <NA> <NA> {spk} <NA> <NA>\n")
+                        in_segment = False
+
+                if in_segment:
+                    end_time = num_frames * frame_shift
+                    fout.write(f"SPEAKER {filename} 1 {start_time:.3f} {end_time - start_time:.3f} <NA> <NA> {spk} <NA> <NA>\n")
+
 
 def count_sca(sys_rttm, ref_rttm):
     from pyannote.database.util import load_rttm
     from pyannote.core import Annotation
 
     right_num = 0
+    sys_res = []
+    ref_res = []
     for rttm in tqdm(os.listdir(sys_rttm)):
         if not rttm.endswith(".rttm"):
             continue
-    
         sys_rttm_path = os.path.join(sys_rttm, rttm)
         ref_rttm_path = os.path.join(ref_rttm, rttm)
         
@@ -72,16 +67,14 @@ def count_sca(sys_rttm, ref_rttm):
         else:
             ref_ann = list(load_rttm(ref_rttm_path).values())[0]
             ref_labels = len(set(ref_ann.labels()))
-        
-
-        # print(sys_labels, ref_labels)
         right_num += sys_labels == ref_labels
+        sys_res.append(sys_labels)
+        ref_res.append(ref_labels)
     return right_num / len(os.listdir(sys_rttm))
 
 
 def count_sca_with_conf_int(sys_rttm, ref_rttm):
     from pyannote.database.util import load_rttm
-    from pyannote.core import Annotation
     from confidence_intervals import evaluate_with_conf_int
     
     right_num = 0
@@ -110,8 +103,8 @@ def count_sca_with_conf_int(sys_rttm, ref_rttm):
         sys_res.append(sys_labels)
         ref_res.append(ref_labels)
         
-        def sca_score(sys, ref):
-            return np.sum(np.array(sys) == np.array(ref)) / len(sys)
+    def sca_score(sys, ref):
+        return np.sum(np.array(sys) == np.array(ref)) / len(sys)
 
     res = evaluate_with_conf_int(np.array(sys_res), sca_score, np.array(ref_res))
     print(res)
@@ -172,39 +165,29 @@ if __name__ == "__main__":
     parser.add_argument("--ref_rttm", type=str, default="/home/ids/bli-24/data/ami/ref",help="reference label rttm")
     parser.add_argument("--sys_wav", type=str, default="/home/ids/bli-24/data/ami/our_base",help="output wavefile directory")
     parser.add_argument("--save_dir", type=str, default="/home/ids/bli-24/data/baseline",help="save middle results directory")
-    parser.add_argument("--separate", type=bool, default=False,help="whether to separate channel")
-    parser.add_argument("--vad", type=bool, default=False,help="whether to vad")
-    parser.add_argument("--sca", type=bool, default=False,help="whether to compute sca")
+    parser.add_argument("--diar2rttm", type=bool, default=True,help="whether to convert diar to rttm")
     parser.add_argument("--der", type=bool, default=True,help="whether to compute der")
+    parser.add_argument("--sca", type=bool, default=True,help="whether to compute sca")
     args = parser.parse_args()
     
+    save_dir = os.path.join(args.save_dir, "diar2rttm")
+    if args.diar2rttm:
+        diar2rttm(args.sys_wav, save_dir)    
+        
+    ref_rttm_list = [os.path.join(args.ref_rttm, rttm) for rttm in os.listdir(args.ref_rttm)]
+    sys_rttm_list = [os.path.join(save_dir, rttm) for rttm in os.listdir(args.ref_rttm)]
     
-    # First step: vad sys output to rttm
-    separate_dir = os.path.join(args.save_dir, "separate")
-    if args.separate:
-        os.makedirs(separate_dir, exist_ok=True)
-        print("---separate channel---")
-        separate_channel(args.sys_wav, separate_dir)
     
-    vad_dir = os.path.join(args.save_dir, "vad")
-    if args.vad:
-        os.makedirs(vad_dir, exist_ok=True)
-        print("---vad---")
-        vad(separate_dir, vad_dir)
     
-    # Second step: compute sca
-    if args.sca:
-        print("---sca---")
-        sca = count_sca_with_conf_int(vad_dir, args.ref_rttm)
-        print(sca)
-    
-    # Third step: compute der
     if args.der:    
         print("---der---")
-        ref_rttm_list = [os.path.join(args.ref_rttm, rttm) for rttm in os.listdir(args.ref_rttm)]
-        sys_rttm_list = [os.path.join(vad_dir, rttm) for rttm in os.listdir(args.ref_rttm)]
-        der = batch_compute_der_with_conf_int(ref_rttm_list, sys_rttm_list)
+        der = batch_compute_der(ref_rttm_list, sys_rttm_list)
         print(der)
+    
+    if args.sca:
+        print("---sca---")
+        sca = count_sca_with_conf_int(args.ref_rttm, save_dir)
+        print(sca)
 
 
     
