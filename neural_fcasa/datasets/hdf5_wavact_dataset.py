@@ -21,7 +21,8 @@ class HDF5WavActDataset(torch.utils.data.Dataset):
     ) -> None:
         super().__init__()
 
-        self._dataset = CachedDataset(HDF5Dataset(dataset_path))
+        # self._dataset = CachedDataset(HDF5Dataset(dataset_path))
+        self._dataset = HDF5Dataset(dataset_path)
 
         self.duration = duration
         self.sr = sr
