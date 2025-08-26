@@ -19,8 +19,8 @@ trainer:
   # strategy: auto
   devices: 2
   strategy: ddp
-  num_nodes: 4
-  accumulate_grad_batches: 1
+  num_nodes: 3
+  accumulate_grad_batches: 2
 
   max_epochs: 200
   gradient_clip_val: 5.0
@@ -31,7 +31,7 @@ trainer:
 
   callbacks:
     - _target_: lightning.pytorch.callbacks.ModelCheckpoint
-      filename: "{epoch:04d}--val_loss_{val_loss:.4f}"
+      filename: "{epoch:04d}--val_loss_{validation/val_loss:.4f}"
       save_last: True
       save_top_k: 3
       monitor: validation/loss
@@ -57,7 +57,7 @@ datamodule:
   _target_: neural_fcasa.datamodules.hdf5_wavact_datamodule.DataModule
   train_dataset_path: ${working_directory}/../../processed_data/hdf5/${dataset_name}-tr.hdf5
   val_dataset_path: ${working_directory}/../../processed_data/hdf5/${dataset_name}-cv.hdf5
-  batch_size: 12
+  batch_size: 10
   duration: 10
   sr: ${sr}
   hop_length: ${hop_length}
