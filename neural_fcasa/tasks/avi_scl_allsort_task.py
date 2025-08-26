@@ -35,6 +35,8 @@ class AVITask(OptimizerLightningModule):
         beta: float,
         gamma: float,
         optimizer_config: OptimizerConfig,
+        distribution: str = "Gaussian",
+        dist_param: float = None,
     ):
         super().__init__(optimizer_config)
 
@@ -54,6 +56,9 @@ class AVITask(OptimizerLightningModule):
         perms = torch.tensor(list(it.permutations(range(0, n_src - 1))))
         perms = torch.concat((perms, torch.full((perms.shape[0], 1), n_src - 1, dtype=perms.dtype)), dim=-1)
         self.register_buffer("perms", perms)
+
+        self.distribution = distribution
+        self.dist_param = dist_param
 
     @torch.autocast("cuda", enabled=False)
     def training_step(self, batch: tuple[torch.Tensor, torch.Tensor], batch_idx, log_prefix: str = "training"):
@@ -86,7 +91,26 @@ class AVITask(OptimizerLightningModule):
 
                 yt_ = torch.einsum("pnt,fnt,fmn->pfmt", act_perm_, lm[b], g[b]) + 1e-6
                 yt_ = yt_ * torch.mean(xt[b].clip(1e-6) / yt_, dim=(1, 2, 3), keepdim=True)
-                nll_x_ = yt_.log().sum(dim=(1, 2, 3)) + torch.sum(xt[b].clip(1e-6) / yt_, dim=(1, 2, 3))
+
+                if self.distribution.lower() == "gaussian":
+                    nll_x_ = yt_.log().sum(dim=(1, 2, 3)) + torch.sum(xt[b].clip(1e-6) / yt_, dim=(1, 2, 3))
+                elif self.distribution.lower() == "laplace":
+                    scale_ = (yt_.clip(1e-12)).sqrt()   # b = sqrt(yt)
+                    amp_   = (xt[b].clip(1e-12)).sqrt()  # x = sqrt(xt)
+                    nll_x_ = scale_.log().sum((1,2,3)) + (amp_ / scale_).sum((1,2,3))
+                elif self.distribution.lower() == "gamma":
+                    k = float(self.dist_param)
+                    nll_x_ = (k * yt_.log()) \
+                        + (k * xt[b] / yt_) \
+                        - (k - 1) * xt[b].log()
+                    nll_x_ = nll_x_.sum((1, 2, 3)) 
+                elif self.distribution.lower() == "student-t":
+                    nu = float(self.dist_param)
+                    scale_ = (yt_.clip(1e-12)).sqrt()
+                    amp2_  = xt[b].clip(1e-12)
+                    nll_x_ = scale_.log()  + 0.5 * (nu + 1.0) * torch.log1p(amp2_ / (nu * scale_**2))
+                    nll_x_ = nll_x_.sum((1, 2, 3))
+                    
 
                 nll_w_ = fn.binary_cross_entropy(
                     repeat(pw[b], "n t -> p n t", p=self.perms.shape[0]),
@@ -104,7 +128,25 @@ class AVITask(OptimizerLightningModule):
         yt = torch.einsum("bnt,bfnt,bfmn->bfmt", act_pit, lm, g) + 1e-6
         yt = yt * torch.mean(xt.clip(1e-6) / yt, dim=(1, 2, 3), keepdim=True)
 
-        nll = yt.log().sum() / BFT + torch.sum(xt.clip(1e-6) / yt) / BFT - 2 * ldQ.sum() / (B * F)
+
+
+        if self.distribution.lower() == "gaussian":
+            nll = yt.log().sum() / BFT + torch.sum(xt.clip(1e-6) / yt) / BFT - 2 * ldQ.sum() / (B * F)
+        elif self.distribution.lower() == "laplace":
+            bt = yt.clip(1e-12).sqrt()
+            absx = xt.clip(1e-12).sqrt()
+            nll = bt.log().sum() / BFT + torch.sum(absx/bt) / BFT - 2 * ldQ.sum() / (B * F)
+        elif self.distribution.lower() == "gamma":
+            k = float(self.dist_param)
+            nll = k * yt.log().sum()/ BFT + torch.sum(k * xt.clip(1e-6) / yt) / BFT - (k - 1) * xt.clip(1e-6).log().sum()/BFT - 2 * ldQ.sum() / (B * F)
+        elif self.distribution.lower() == "student-t":
+            nu = float(self.dist_param)
+            scale = (yt.clip(1e-12)).sqrt()
+            amp2 = xt.clip(1e-12)
+            nll = scale.log().sum()/BFT+ 0.5 * (nu + 1.0) * torch.log1p(amp2 / (nu * scale**2))
+            nll = nll.sum() / (B * F * T)
+            nll = nll - 2 * ldQ.sum() / (B * F)
+        
 
         # calculate kl
         kl = kl_divergence(qz, Normal(0, 1)).sum() / BFT
