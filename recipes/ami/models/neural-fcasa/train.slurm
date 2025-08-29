@@ -5,7 +5,7 @@
 #SBATCH --partition=A40
 #SBATCH --gres=gpu:2
 #SBATCH --cpus-per-task=20
-#SBATCH --nodes=5
+#SBATCH --nodes=4
 #SBATCH --exclude=node35
 #SBATCH --mem=64G
 #SBATCH --time=24:00:00
@@ -21,7 +21,6 @@ export MASTER_PORT=${MAIN_PORT}
 
 echo "Job started at: $(date)"
 
-# srun python train.py config.yaml --resume_ckpt ./version_16/checkpoints/last.ckpt
 srun python train.py config.yaml
 
 echo "Job finished at: $(date)"
