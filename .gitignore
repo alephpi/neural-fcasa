@@ -175,3 +175,4 @@ debug*
 *.wav
 test*
 recipes/ami/jobs*
+.hydra
