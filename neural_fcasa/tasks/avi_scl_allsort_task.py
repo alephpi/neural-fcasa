@@ -184,4 +184,12 @@ class AVITask(OptimizerLightningModule):
         return loss
 
     def validation_step(self, batch: tuple[torch.Tensor, torch.Tensor], batch_idx):
-        return self.training_step(batch, batch_idx, log_prefix="validation")
+        loss = self.training_step(batch, batch_idx, log_prefix="validation")
+        self.log("val_loss", loss, 
+                    prog_bar=False,
+                    on_epoch=True,
+                    on_step=False,
+                    batch_size=batch[0].shape[0],
+                    sync_dist=True
+                )
+        return
