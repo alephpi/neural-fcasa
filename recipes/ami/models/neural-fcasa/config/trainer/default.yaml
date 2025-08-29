@@ -21,3 +21,5 @@ deterministic: False
 
 logger: ???
 callbacks: ???
+default_root_dir: ${root_dir}
+ckpt_path: null
