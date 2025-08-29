@@ -36,7 +36,7 @@ class AVITask(OptimizerLightningModule):
         gamma: float,
         optimizer_config: OptimizerConfig,
         distribution: str = "Gaussian",
-        dist_param: dict[str, float] = {},
+        dist_param: float = 2, # shape parameter for heavy-tailed models, i.e. beta for leptokurtic distribution or nu for student't
     ):
         super().__init__(optimizer_config)
 
@@ -106,10 +106,10 @@ class AVITask(OptimizerLightningModule):
                 elif self.distribution.lower() == "laplace":
                     nll_x_ = yt_.log().sum(dim=(1, 2, 3)) + ratio_xt_yt.sum(dim=2).sqrt().sum(dim=(1, 2))
                 elif self.distribution.lower() == "leptokurtic":
-                    beta = self.dist_param["beta"]
+                    beta = self.dist_param
                     nll_x_ = yt_.log().sum(dim=(1, 2, 3)) + (ratio_xt_yt.sum(dim=2) ** (beta/2)).sum(dim=(1, 2))
                 elif self.distribution.lower() == "student-t":
-                    nu = self.dist_param["nu"]
+                    nu = self.dist_param
                     nll_x_ = yt_.log().sum(dim=(1, 2, 3)) + (nu/2+M) * (torch.log1p((2/nu)*ratio_xt_yt.sum(dim=2)).sum(dim=(1, 2)))
                 else:
                     raise ValueError(f"Unsupported distribution: {self.distribution=}, should be one of gaussian, student-t, laplace, leptokurtic.")
