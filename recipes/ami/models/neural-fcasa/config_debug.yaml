@@ -27,7 +27,7 @@ trainer:
   accumulate_grad_batches: 1
   limit_train_batches: 2
   limit_val_batches: 2
-  max_epochs: 200
+  max_epochs: 4
   gradient_clip_val: 5.0
   precision: 16-mixed
   benchmark: True
@@ -42,6 +42,8 @@ trainer:
       save_top_k: 3
       monitor: val_loss
       mode: min
+
+    - _target_: neural_fcasa.callbacks.best_model_saver.BestModelSaverCallback
 
     - _target_: lightning.pytorch.callbacks.TQDMProgressBar
       refresh_rate: 5
