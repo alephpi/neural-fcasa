@@ -1,3 +1,0 @@
-# https://lightning.ai/docs/pytorch/latest/api/lightning.pytorch.callbacks.RichProgressBar.html
-- _target_: lightning.pytorch.callbacks.RichProgressBar
-  refresh_rate: 5

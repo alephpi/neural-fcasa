@@ -12,9 +12,10 @@ def main(cfg) -> None:
     trainer: L.Trainer = instantiate(cfg.trainer)
     model = instantiate(cfg.model)
     datamodule = instantiate(cfg.datamodule)
-
     # Resume from checkpoint if provided
-    fit_kwargs = dict(model=model, datamodule=datamodule)
+    ckpt_path = getattr(cfg, "ckpt_path", None)
+
+    fit_kwargs = dict(model=model, datamodule=datamodule, ckpt_path=ckpt_path)
     trainer.fit(**fit_kwargs)
 
 

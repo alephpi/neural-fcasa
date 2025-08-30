@@ -1,5 +1,0 @@
-# https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.ModelCheckpoint.html
-- _target_: lightning.pytorch.callbacks.ModelCheckpoint
-  filename: "{epoch:04d}"
-  save_last: True
-  save_top_k: -1
