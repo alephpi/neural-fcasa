@@ -1,7 +1,28 @@
 defaults:
   - global
+  - hydra: default
   - datamodule: default
   - model: default
-  - trainer: ddp_A40
+  - trainer: ddp
   - trainer/callbacks: default
   - trainer/logger: tensorboard
+  - override hydra/launcher: submitit_slurm
+  - _self_
+
+trainer:
+  num_nodes: 3
+  devices: 2
+  accumulate_grad_batches: 2
+  max_epochs: 200
+
+hydra:
+  launcher:
+    submitit_folder: ${hydra.sweep.dir}/.submitit/%j
+    name: neural-fcasa
+    partition: A40
+    nodes: 3
+    gpus_per_node: 2
+    cpus_per_task: 20
+    tasks_per_node: 2
+    mem_gb: 110
+    timeout_min: 3000
