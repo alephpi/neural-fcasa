@@ -140,10 +140,10 @@ class AVITask(OptimizerLightningModule):
             # special case of leptokurtic where beta=1
             nll = yt.log().sum() / BFT + ratio_xt_yt.sum(dim=2).sqrt().sum() / BFT - 2 * ldQ.sum() / (B * F)
         elif self.distribution.lower() == "leptokurtic":
-            beta = self.dist_param["beta"]
+            beta = self.dist_param
             nll = yt.log().sum() / BFT + (ratio_xt_yt.sum(dim=2) ** (beta/2)).sum() / BFT - 2 * ldQ.sum() / (B * F)
         elif self.distribution.lower() == "student-t":
-            nu = self.dist_param["nu"]
+            nu = self.dist_param
             nll = yt.log().sum() / BFT + (nu/2+M) * (torch.log1p((2/nu)*ratio_xt_yt.sum(dim=2))).sum() / BFT - 2 * ldQ.sum() / (B * F)
         else:
             raise ValueError(f"Unsupported distribution: {self.distribution=}, should be one of gaussian, student-t, laplace, leptokurtic.")
