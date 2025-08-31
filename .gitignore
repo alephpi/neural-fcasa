@@ -169,9 +169,12 @@ recipes/ami/models/neural-fcasa/version*
 
 *.dump
 log*
+!logger
 *.ipynb
 data_sanity_check*
 debug*
 *.wav
 test*
 recipes/ami/jobs*
+.hydra
+outputs
