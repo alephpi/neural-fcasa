@@ -18,11 +18,14 @@ class HDF5WavActDataset(torch.utils.data.Dataset):
         hop_length: int | None = None,
         randperm_mic: bool = True,
         randperm_spk: bool = True,
+        cached:bool = False,
     ) -> None:
         super().__init__()
 
-        # self._dataset = CachedDataset(HDF5Dataset(dataset_path))
-        self._dataset = HDF5Dataset(dataset_path)
+        if cached:
+            self._dataset = CachedDataset(HDF5Dataset(dataset_path))
+        else:
+            self._dataset = HDF5Dataset(dataset_path)
 
         self.duration = duration
         self.sr = sr

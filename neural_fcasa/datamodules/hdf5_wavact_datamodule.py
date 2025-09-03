@@ -23,6 +23,7 @@ class DataModule(lt.LightningDataModule):
         randperm_mic: bool = True,
         randperm_spk: bool = True,
         num_workers: int = 10,
+        cached: bool = False,
     ):
         super().__init__()
 
@@ -42,6 +43,7 @@ class DataModule(lt.LightningDataModule):
             hop_length=hop_length,
             randperm_mic=randperm_mic,
             randperm_spk=randperm_spk,
+            cached=cached,
         )
 
     def setup(self, stage: str | None):
