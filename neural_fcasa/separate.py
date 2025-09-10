@@ -44,24 +44,13 @@ def add_common_args(parser):
 
 
 def initialize(args: Namespace, unk_args: list[str]):
-    if args.model_path.startswith("hf://"):
-        hf_path = str(args.model_path).removeprefix("hf://")
-        args.model_path = Path(snapshot_download(hf_path))
-    else:
-        args.model_path = Path(args.model_path)
-
-    config = oc.merge(
-        oc.load(Path(args.model_path) / "config.yaml"),  # todo
-        oc.from_cli(unk_args),
-    )
-
+    config = oc.load(args.cfg_path)
     config.autocast = args.device.startswith("cuda")
 
-    checkpoint_path = Path(args.model_path) / "version_0" / "checkpoints" / "last.ckpt"
-    config.task._target_ += ".load_from_checkpoint"
+    config.model._target_ += ".load_from_checkpoint"
     model = instantiate(
-        config.task,
-        checkpoint_path=checkpoint_path,
+        config.model,
+        checkpoint_path=args.ckpt_path,
         map_location=args.device,
     ).to(args.device)
     model.eval()
@@ -128,4 +117,11 @@ def separate(src_filename: Path, dst_filename: Path, ctx: Context, args: Namespa
 
 
 if __name__ == "__main__":
+    # import debugpy
+    # try:
+    #     debugpy.listen(('localhost', 9503))
+    #     print('Waiting for debugger attach')
+    #     debugpy.wait_for_client()
+    # except Exception as e:
+    #     pass
     main(add_common_args, initialize, separate)

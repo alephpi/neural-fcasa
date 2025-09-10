@@ -1,30 +1,29 @@
+from pathlib import Path
 import pickle
 import os
 from tqdm import tqdm
 import numpy as np
-import pandas as pd
 import argparse
 
-def diar2rttm(src_dir, dst_dir):
+def diar2rttm(diar_dir: Path, rttm_dir: Path):
+
+    if (rttm_dir / ".done").exists():
+        return
 
     frame_shift = 0.01 # 10ms frame shift
-    
-    os.makedirs(dst_dir, exist_ok=True)
-    
-    for diar in tqdm(os.listdir(src_dir)):
-        if not diar.endswith(".diar"):
-            continue
-        diar_path = os.path.join(src_dir, diar)
-        # print(diar_path)
-        output_rttm = os.path.join(dst_dir, diar.replace(".diar", ".rttm"))
-        
-        filename = os.path.splitext(diar)[0]
-    
-        with open(diar_path, "rb") as f:
+    diars = list(diar_dir.glob("*.diar"))
+    rttm_dir.mkdir(exist_ok=True)
+
+
+    for diar in tqdm(diars):
+        filename = diar.stem
+        rttm = filename + ".rttm"
+
+        with open(diar, "rb") as f:
             mask = pickle.load(f)  # shape: [num_speakers, num_frames]
             mask = mask[0,:5,:] # last channel is noise channel
 
-        with open(output_rttm, "w") as fout:
+        with open(rttm_dir / rttm, "w") as fout:
             num_speakers, num_frames = mask.shape
             for spk in range(num_speakers):
                 active = mask[spk]
@@ -43,10 +42,24 @@ def diar2rttm(src_dir, dst_dir):
                     end_time = num_frames * frame_shift
                     fout.write(f"SPEAKER {filename} 1 {start_time:.3f} {end_time - start_time:.3f} <NA> <NA> {spk} <NA> <NA>\n")
 
+    (rttm_dir / ".done").touch()
+    return
+
+def csv2rttm(src_dir: Path):
+    for csv in tqdm(src_dir.glob("*.csv")):
+        rttm = csv.with_suffix(".rttm")
+        filename = csv.stem
+        with open(rttm, "w") as fout:
+            with open(csv, "r") as f:
+                for line in f:
+                    parts = line.strip().split(",")
+                    start_time = float(parts[0])
+                    end_time = float(parts[1])
+                    spk = parts[2]
+                    fout.write(f"SPEAKER {filename} 1 {start_time:.3f} {end_time - start_time:.3f} <NA> <NA> {spk} <NA> <NA>\n")
 
 def count_sca(sys_rttm, ref_rttm):
     from pyannote.database.util import load_rttm
-    from pyannote.core import Annotation
 
     right_num = 0
     sys_res = []
@@ -73,133 +86,112 @@ def count_sca(sys_rttm, ref_rttm):
     return right_num / len(os.listdir(sys_rttm))
 
 
-def count_sca_with_conf_int(sys_rttm, ref_rttm):
+def compute_sca(sys_rttm_dir: Path, ref_rttm_dir: Path):
     from pyannote.database.util import load_rttm
     from confidence_intervals import evaluate_with_conf_int
-    
-    right_num = 0
+
     sys_res = []
     ref_res = []
-    for rttm in tqdm(os.listdir(sys_rttm)):
-        if not rttm.endswith(".rttm"):
-            continue
-        sys_rttm_path = os.path.join(sys_rttm, rttm)
-        ref_rttm_path = os.path.join(ref_rttm, rttm)
-        
-        if len(list(load_rttm(sys_rttm_path).values())) == 0:
-            sys_labels = 0
+    sys_rttms = list(sys_rttm_dir.glob("*.rttm"))
+    for sys_rttm in tqdm(sys_rttms):
+        ref_rttm = ref_rttm_dir / sys_rttm.name
+        if len(list(load_rttm(sys_rttm).values())) == 0:
+            sys_num_speakers = 0
         else:
-            sys_ann = list(load_rttm(sys_rttm_path).values())[0]
-            sys_labels = len(set(sys_ann.labels()))            
-        if len(list(load_rttm(ref_rttm_path).values())) == 0:
-            ref_labels = 0
+            sys_ann = list(load_rttm(sys_rttm).values())[0]
+            sys_num_speakers = len(set(sys_ann.labels()))
+        if len(list(load_rttm(ref_rttm).values())) == 0:
+            ref_num_speakers = 0
         else:
-            ref_ann = list(load_rttm(ref_rttm_path).values())[0]
-            ref_labels = len(set(ref_ann.labels()))
-        
+            ref_ann = list(load_rttm(ref_rttm).values())[0]
+            ref_num_speakers = len(set(ref_ann.labels()))
 
         # print(sys_labels, ref_labels)
-        right_num += sys_labels == ref_labels
-        sys_res.append(sys_labels)
-        ref_res.append(ref_labels)
-        
+        sys_res.append(sys_num_speakers)
+        ref_res.append(ref_num_speakers)
+
     def sca_score(sys, ref):
         return np.sum(np.array(sys) == np.array(ref)) / len(sys)
 
     res = evaluate_with_conf_int(np.array(sys_res), sca_score, np.array(ref_res))
-    print(res)
-
     return res
 
-def batch_compute_der(reference_rttm_list, hypothesis_rttm_list):
+def compute_der(ref_rttms_dir: Path, sys_rttms_dir: Path):
     """
-    
-    Args:
-        reference_rttm_list (list): reference RTTM file path list
-        hypothesis_rttm_list (list): system output RTTM file path list
-        
     Returns:
         dict: each file's DER score and global average DER
     """
     
+    from pyannote.core import Timeline, Segment
     from pyannote.metrics.diarization import DiarizationErrorRate
-    from pyannote.core import Annotation
-    from pyannote.database.util import load_rttm, load_uem
+    from pyannote.database.util import load_rttm
+    from confidence_intervals import get_bootstrap_indices, get_conf_int
     
-    if len(reference_rttm_list) != len(hypothesis_rttm_list):
+    ref_rttms = list(ref_rttms_dir.glob("*.rttm"))
+    sys_rttms = list(sys_rttms_dir.glob("*.rttm"))
+    if len(ref_rttms) != len(sys_rttms):
         raise ValueError("reference and system rttm file number mismatch")
-    metric = DiarizationErrorRate()
-    results = {}
-    
-    for ref_path, hyp_path in tqdm(zip(reference_rttm_list, hypothesis_rttm_list)):
-        try:
-            # get file name(without extension) as URI
-            uri = os.path.splitext(os.path.basename(ref_path))[0]
-            
-            # load RTTM file
-            reference = load_rttm(ref_path)[uri]
-            hypothesis = load_rttm(hyp_path)[uri]
-            
-            # computeDER
-            der = metric(reference, hypothesis, detailed=False)
-            
-            results[uri] = der
-            # print(f"{uri}: DER = {der:.3f}")
-            
-        except Exception as e:
-            print(f"Error processing file pair {ref_path} and {hyp_path}: {str(e)}")
-            results[uri] = None
-    
-    # compute global average DER
-    valid_scores = [v for v in results.values() if v is not None]
-    global_der = sum(valid_scores) / len(valid_scores) if valid_scores else None
-    
-    return {
-        "file_scores": results,
-        "global_der": global_der
-    }
 
+    metric = DiarizationErrorRate()
+    ders = []
+
+    for ref_rttm in tqdm(ref_rttms):
+        uri = ref_rttm.stem
+        sys_rttm = sys_rttms_dir / ref_rttm.name
+        reference = load_rttm(ref_rttm).get(uri, None)
+        hypothesis = load_rttm(sys_rttm).get(uri, None)
+        uem = Timeline([Segment(0, 10)], uri=uri)
+        if reference is not None:
+            if hypothesis is None:
+                der = 1 # MISS
+            else:
+                der = metric(reference, hypothesis, uem=uem, detailed=False)
+        else:
+            # invalid ref, skip
+            continue
+
+        ders.append(der)
+
+    ders = np.array(ders)
+    der_bootstrapped = []
+    num_samples = len(ders)
+    num_bootstraps = 1000 # int(50/alpha*100), where alpha = 5
+    for nb in np.arange(num_bootstraps):
+        indices = get_bootstrap_indices(num_samples, None, random_state=nb)
+        der_bootstrapped.append(ders[indices])
+    # compute global average DER
+    der_mean = ders.mean()
+    der_conf_int = get_conf_int(der_bootstrapped, alpha=5)
+    
+    return der_mean, der_conf_int
 
 if __name__ == "__main__":
+    # import debugpy
+    # try:
+    #     debugpy.listen(('localhost', 9504))
+    #     print('Waiting for debugger attach')
+    #     debugpy.wait_for_client()
+    # except Exception as e:
+    #     pass
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ref_rttm", type=str, default="/home/ids/bli-24/data/ami/ref",help="reference label rttm")
-    parser.add_argument("--sys_wav", type=str, default="/home/ids/bli-24/data/ami/our_base",help="output wavefile directory")
-    parser.add_argument("--save_dir", type=str, default="/home/ids/bli-24/data/baseline",help="save middle results directory")
-    parser.add_argument("--diar2rttm", type=bool, default=True,help="whether to convert diar to rttm")
-    parser.add_argument("--der", type=bool, default=True,help="whether to compute der")
-    parser.add_argument("--sca", type=bool, default=True,help="whether to compute sca")
+    parser.add_argument("--ref_rttm_dir", type=str, default="/home/ids/smao-22/phd/neural-fcasa/recipes/ami/processed_data/tt/rttm",help="reference label rttm")
+    parser.add_argument("--sys_rttm_dir", type=str, help="system rttm directory")
+    parser.add_argument("--diar_dir", type=str, help="system diar directory")
     args = parser.parse_args()
-    
-    save_dir = os.path.join(args.save_dir, "diar2rttm")
-    if args.diar2rttm:
-        diar2rttm(args.sys_wav, save_dir)    
-        
-    ref_rttm_list = [os.path.join(args.ref_rttm, rttm) for rttm in os.listdir(args.ref_rttm)]
-    sys_rttm_list = [os.path.join(save_dir, rttm) for rttm in os.listdir(args.ref_rttm)]
-    
-    
-    
-    if args.der:    
-        print("---der---")
-        der = batch_compute_der(ref_rttm_list, sys_rttm_list)
-        print(der)
-    
-    if args.sca:
-        print("---sca---")
-        sca = count_sca_with_conf_int(args.ref_rttm, save_dir)
-        print(sca)
 
+    ref_rttm_dir = Path(args.ref_rttm_dir)
+    assert args.diar_dir or args.sys_rttm_dir, "either diar_dir or sys_rttm_dir should be provided"
+    if args.diar_dir:
+        diar_dir = Path(args.diar_dir)
+        sys_rttm_dir = diar_dir.parent / 'rttm'
+        diar2rttm(diar_dir, sys_rttm_dir)
+    else:
+        sys_rttm_dir = Path(args.sys_rttm_dir)
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    print("---sca---")
+    sca, (sca_lower, sca_upper) = compute_sca(sys_rttm_dir, ref_rttm_dir)
+    print(sca, sca_lower-sca, sca_upper-sca)
 
-    
+    print("---der---")
+    der, (der_lower, der_upper) = compute_der(ref_rttm_dir, sys_rttm_dir)
+    print(der, der_lower, der_upper)

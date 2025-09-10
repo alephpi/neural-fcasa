@@ -37,18 +37,20 @@ def main(add_common_args: Callable[[ArgumentParser], None], initialize: Callable
     sub_parsers = parser.add_subparsers()
 
     sub_parser = sub_parsers.add_parser("one")
-    sub_parser.add_argument("model_path", type=str)
+    sub_parser.add_argument("cfg_path", type=str)
+    sub_parser.add_argument("ckpt_path", type=str)
     sub_parser.add_argument("src_filename", type=Path)
     sub_parser.add_argument("dst_filename", type=Path)
     add_common_args(sub_parser)
     sub_parser.set_defaults(handler=separate_one)
 
     sub_parser = sub_parsers.add_parser("batch")
-    sub_parser.add_argument("model_path", type=str)
+    sub_parser.add_argument("cfg_path", type=str)
+    sub_parser.add_argument("ckpt_path", type=str)
     sub_parser.add_argument("src_path", type=Path)
     sub_parser.add_argument("dst_path", type=Path)
     add_common_args(sub_parser)
-    sub_parser.add_argument("--ext", type=str, default="flac")
+    sub_parser.add_argument("--ext", type=str, default="wav")
     sub_parser.set_defaults(handler=separate_batch)
 
     args, unk_args = parser.parse_known_args()
