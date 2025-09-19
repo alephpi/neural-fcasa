@@ -1,5 +1,4 @@
 import subprocess
-from typing import Optional
 from pathlib import Path
 
 ROOT_DIR= Path("/home/ids/smao-22/phd/neural-fcasa")
@@ -19,8 +18,8 @@ def sep_diar(cfg_path: Path, ckpt_path: Path, dst_dir: Path):
         "python", str(SEP_DIAR_SCRIPT), "batch",
         str(cfg_path),
         str(ckpt_path),
+        "--diarize",
         "--noi_snr=40",
-        "--dump_diar",
         "--normalize",
         str(SRC_DIR),
         str(dst_dir)
@@ -34,9 +33,9 @@ def sep_diar(cfg_path: Path, ckpt_path: Path, dst_dir: Path):
     except Exception as e:
         print(e)
 
-def eval(diar_dir: Path):
-    if (diar_dir.parent / "score.txt").exists():
-        return
+def eval(diar_dir: Path, filename: str = "score.txt"):
+    # if (diar_dir.parent / filename).exists():
+    #     return
 
     cmd = [
         "python",
@@ -48,7 +47,7 @@ def eval(diar_dir: Path):
 
     try:
         # 执行命令
-        with open(diar_dir.parent/"score.txt", "w", encoding="utf-8") as f:
+        with open(diar_dir.parent/ filename, "w", encoding="utf-8") as f:
             subprocess.run(
                 cmd,
                 check=True,
@@ -69,28 +68,40 @@ if __name__ == "__main__":
     # except Exception as e:
     #     pass
 
+    # CKPT_PATH_DICT = {
+    #     "Gaussian": "dist=Gaussian-param=None/2025-09-02_12-50-49/0",
+    #     "Laplace": "dist=Laplace-param=None/2025-09-02_12-50-49/0",
+    #     "Leptokurtic_0.4": "dist=Leptokurtic-param=0.4/2025-09-03_08-31-17/0",
+    #     "Leptokurtic_0.8": "dist=Leptokurtic-param=0.8/2025-09-03_08-31-18/0",
+    #     "Leptokurtic_1": "dist=Leptokurtic-param=1/2025-09-03_08-31-17/0",
+    #     "Leptokurtic_1.2": "dist=Leptokurtic-param=1.2/2025-09-03_08-31-17/0",
+    #     "Leptokurtic_1.6": "dist=Leptokurtic-param=1.6/2025-09-03_08-31-17/0",
+    #     "Student-t_0.1": "dist=Student-t-param=0.1/2025-09-03_08-31-17/0",
+    #     "Student-t_1": "dist=Student-t-param=1/2025-09-03_08-31-18/0",
+    #     "Student-t_10": "dist=Student-t-param=10/2025-09-03_08-31-18/0",
+    #     "Student-t_100": "dist=Student-t-param=100/2025-09-03_08-31-17/0"
+    # }
+
     CKPT_PATH_DICT = {
-        "Gaussian": "dist=Gaussian-param=None/2025-09-02_12-50-49/0",
-        "Laplace": "dist=Laplace-param=None/2025-09-02_12-50-49/0",
-        "Leptokurtic_0.4": "dist=Leptokurtic-param=0.4/2025-09-03_08-31-17/0",
-        "Leptokurtic_0.8": "dist=Leptokurtic-param=0.8/2025-09-03_08-31-18/0",
-        "Leptokurtic_1": "dist=Leptokurtic-param=1/2025-09-03_08-31-17/0",
-        "Leptokurtic_1.2": "dist=Leptokurtic-param=1.2/2025-09-03_08-31-17/0",
-        "Leptokurtic_1.6": "dist=Leptokurtic-param=1.6/2025-09-03_08-31-17/0",
-        "Student-t_0.1": "dist=Student-t-param=0.1/2025-09-03_08-31-17/0",
-        "Student-t_1": "dist=Student-t-param=1/2025-09-03_08-31-18/0",
-        "Student-t_10": "dist=Student-t-param=10/2025-09-03_08-31-18/0",
-        "Student-t_100": "dist=Student-t-param=100/2025-09-03_08-31-17/0"
+        "Leptokurtic_0.4": "dist=Leptokurtic-param=0.4/2025-09-11_18-51-11/0",
+        "Leptokurtic_0.8": "dist=Leptokurtic-param=0.8/2025-09-11_18-51-11/0",
+        "Leptokurtic_1": "dist=Leptokurtic-param=1/2025-09-11_18-51-10/0",
+        "Leptokurtic_1.2": "dist=Leptokurtic-param=1.2/2025-09-11_18-51-10/0",
+        "Leptokurtic_1.6": "dist=Leptokurtic-param=1.6/2025-09-11_18-51-10/0",
+        "Student-t_0.1": "dist=Student-t-param=0.1/2025-09-11_18-51-11/0",
+        "Student-t_1": "dist=Student-t-param=1/2025-09-11_18-51-11/0",
+        "Student-t_10": "dist=Student-t-param=10/2025-09-11_18-51-10/0",
+        "Student-t_100": "dist=Student-t-param=100/2025-09-11_18-51-11/0"
     }
 
-    dst_dir_prefix =ROOT_DIR / "recipes/ami/processed_data/tt/eval"
+    dst_dir_prefix =ROOT_DIR / "recipes/ami/processed_data/tt/new_eval"
     ckpt_path_prefix = ROOT_DIR / "recipes/ami/models/neural-fcasa/outputs"
     for name, ckpt_path_suffix in CKPT_PATH_DICT.items():
         cfg_path = ckpt_path_prefix / ckpt_path_suffix / ".hydra" / "config.yaml"
         ckpt_path_dir = ckpt_path_prefix / ckpt_path_suffix / "checkpoints"
         ckpt_paths = [p for p in ckpt_path_dir.glob("*.ckpt")]
         for ckpt_path in ckpt_paths:
-            dst_dir = dst_dir_prefix / name / ckpt_path.stem / "sep_diar"
+            dst_dir = dst_dir_prefix / name / ckpt_path.stem / "diar"
             sep_diar(cfg_path, ckpt_path, dst_dir)
-            eval(dst_dir)
+            eval(dst_dir, "der.txt")
             # break

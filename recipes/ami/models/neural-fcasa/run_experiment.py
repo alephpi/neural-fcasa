@@ -24,12 +24,7 @@ def run_train_commands():
             param_combinations.append(param1)
         if param2 is not None:
             param_combinations.append(param2)
-    
-    # param_combinations = [("Gaussian", "null"), ("Laplace", "null")] \
-                        # + param_combinations
 
-    # print(param_combinations)
-    # return
     # 启动所有命令
     for i, (distribution, dist_param) in enumerate(param_combinations, 1):
         # 使用f表达式构建完整命令

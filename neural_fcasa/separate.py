@@ -39,7 +39,8 @@ def add_common_args(parser):
     parser.add_argument("--medfilt_size", type=int, default=11)
     parser.add_argument("--noi_snr", type=float, default=None)
     parser.add_argument("--normalize", action="store_true")
-    parser.add_argument("--dump_diar", action="store_true")
+    parser.add_argument("--separate", action="store_true")
+    parser.add_argument("--diarize", action="store_true")
     parser.add_argument("--device", type=str, default="cuda")
 
 
@@ -89,6 +90,12 @@ def separate(src_filename: Path, dst_filename: Path, ctx: Context, args: Namespa
     z, w, g, Q, xt = model.encoder(x)
     w = ctx.median_filt(w).gt(args.thresh).to(torch.float32)
 
+    if args.diarize:
+        with open(dst_filename.with_suffix(".diar"), "wb") as f:
+            pkl.dump(w.cpu().numpy(), f)
+
+    if not args.separate:
+        return
     # decode
     lm = model.decoder(z)  # [B, F, N, T]
 
@@ -99,9 +106,6 @@ def separate(src_filename: Path, dst_filename: Path, ctx: Context, args: Namespa
 
     dst_wav = istft(s, src_wav.shape[-1])
 
-    if args.dump_diar:
-        with open(dst_filename.with_suffix(".diar"), "wb") as f:
-            pkl.dump(w.cpu().numpy(), f)
 
     dst_wav = rearrange(dst_wav, "1 m t -> t m")
 
