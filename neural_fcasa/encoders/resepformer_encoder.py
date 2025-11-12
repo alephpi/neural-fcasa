@@ -242,16 +242,18 @@ class RESepFormerEncoder(nn.Module):
 
         h = self.overlapped_add(h, T)
 
-        zw_att = self.head_zw_att(h)  # [B, D, N, T]
+        zw_att = self.head_zw_att(h)  # [B,M,N]
 
         # z
-        z_mu_, z_sig_ = self.head_z_val(h)  # [B, D, N, T]
+        z_mu_, z_sig_ = self.head_z_val(h)  # [B,D,M,T]
+        w_logits_ = self.head_w_val(h) # [B,M,T]
 
-        z_mu: torch.Tensor = torch.einsum("bmn,bdmt->bdnt", zw_att, z_mu_)
-        w_logits = torch.einsum("bmn,bmt->bnt", zw_att, self.head_w_val(h))
+        z_mu: torch.Tensor = torch.einsum("bmn,bdmt->bdnt", zw_att, z_mu_) # [B,D,N,T]
+        w_logits = torch.einsum("bmn,bmt->bnt", zw_att, w_logits_) # [B,N,T]
 
         if distribution:
-            qz = Normal(z_mu, fn.softplus(torch.einsum("bmn,bdmt->bdnt", zw_att, z_sig_)) + 1e-6)
+            z_sig = fn.softplus(torch.einsum("bmn,bdmt->bdnt", zw_att, z_sig_)) + 1e-6 # [B,D,N,T]
+            qz = Normal(z_mu, z_sig)
             qw = ApproxBernoulli(logits=w_logits, temperature=torch.full_like(w_logits, self.tau))
         else:
             qz = z_mu
