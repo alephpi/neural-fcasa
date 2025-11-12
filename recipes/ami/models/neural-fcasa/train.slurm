@@ -5,10 +5,8 @@
 #SBATCH --partition=A40
 #SBATCH --gres=gpu:2
 #SBATCH --cpus-per-task=20
-#SBATCH --nodes=4
-#SBATCH --exclude=node35
-#SBATCH --mem=64G
-#SBATCH --time=24:00:00
+#SBATCH --nodes=3
+#SBATCH --mem=120G
 #SBATCH --ntasks-per-node=2
 
 export MAIN_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
@@ -18,6 +16,8 @@ export MASTER_PORT=${MAIN_PORT}
 
 # working_dir=$(dirname "${BASH_SOURCE[0]}")
 # Activate environment
+eval "$(micromamba shell hook --shell=bash)"
+micromamba activate cd
 
 echo "Job started at: $(date)"
 

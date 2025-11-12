@@ -19,9 +19,49 @@
             "request": "attach",
             "connect": {
                 "host": "localhost",
-                "port": 9501
+                "port": 9502
             },
             "justMyCode": false,
+        },
+        {
+            "name": "Debug separate.py",
+            "type": "debugpy",
+            "request": "attach",
+            "connect": {
+                "host": "localhost",
+                "port": 9503
+            },
+            "justMyCode": false,
+        },
+        {
+            "name": "Debug eval.py",
+            "type": "debugpy",
+            "request": "attach",
+            "connect": {
+                "host": "localhost",
+                "port": 9504
+            },
+            "justMyCode": false,
+        },
+        {
+            "name": "Debug eval_exp.py",
+            "type": "debugpy",
+            "request": "attach",
+            "connect": {
+                "host": "localhost",
+                "port": 9505
+            },
+            "justMyCode": false,
+        },
+        {
+          "name": "Debug test.py",
+          "type": "debugpy",
+          "request": "attach",
+          "connect": {
+            "host": "localhost",
+            "port": 9527
+          },
+          "justMyCode": false
         }
     ]
 }

@@ -20,11 +20,11 @@ def main(cfg) -> None:
 
 
 if __name__ == "__main__":
-    # import debugpy
-    # try:
-    #     debugpy.listen(('localhost', 9502))
-    #     print('Waiting for debugger attach')
-    #     debugpy.wait_for_client()
-    # except Exception as e:
-    #     pass
+    import debugpy
+    try:
+        debugpy.listen(('localhost', 9502))
+        print('Waiting for debugger attach')
+        debugpy.wait_for_client()
+    except Exception as e:
+        pass
     main()
