@@ -4,14 +4,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import lightning as lt
-
+from ..tasks.avi_scl_allsort_task import DumpData
 
 class VisualizerCallback(lt.Callback):
     def on_validation_start(self, trainer: lt.Trainer, pl_module: Any, tag: str = "training"):
         if not hasattr(pl_module, "dump"):
             return
 
-        dump = pl_module.dump
+        dump: DumpData = pl_module.dump
 
         # numpyize dumped variables
         B, F, N, T = dump.lm.shape

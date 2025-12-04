@@ -15,7 +15,7 @@ from neural_fcasa.nn import (
     SpatialPositionalEncoding,
     TACModule,
 )
-from neural_fcasa.utils.distributions import ApproxBernoulli
+from neural_fcasa.utils.distributions import ApproxBernoulli, BetaPERT
 
 
 class RESepFormerBlock(nn.Module):
@@ -207,8 +207,8 @@ class RESepFormerEncoder(nn.Module):
         self.head_w_val = nn.Sequential(
             nn.Linear(d_model, d_model),
             nn.PReLU(),
-            nn.Linear(d_model, 1),
-            Rearrange("(b m) t 1 -> b m t", m=n_mic),
+            nn.Linear(d_model, 2),
+            Rearrange("(b m) t c -> c b m t", m=n_mic, c=2),
         )
 
         self.head_zw_att = nn.Sequential(
@@ -242,22 +242,32 @@ class RESepFormerEncoder(nn.Module):
 
         h = self.overlapped_add(h, T)
 
+        # an explicit layer to make z and w correlate, as both z and w are the projection of zw_att
         zw_att = self.head_zw_att(h)  # [B,M,N]
 
         # z
         z_mu_, z_sig_ = self.head_z_val(h)  # [B,D,M,T]
-        w_logits_ = self.head_w_val(h) # [B,M,T]
+        # w, mode m and concentration lambda
+        w_m_, w_lmd_ = self.head_w_val(h) # [B,M,T]
 
+        ## merge along microphone to revert the source
         z_mu: torch.Tensor = torch.einsum("bmn,bdmt->bdnt", zw_att, z_mu_) # [B,D,N,T]
-        w_logits = torch.einsum("bmn,bmt->bnt", zw_att, w_logits_) # [B,N,T]
+        # w_logits = torch.einsum("bmn,bmt->bnt", zw_att, w_logits_) # [B,N,T]
+
+        w_m = torch.sigmoid(torch.einsum("bmn,bmt->bnt", zw_att, w_m_)) # [B,N,T]
+
+        # we should mimic w_logits inference to get shape parameters \alpha and \beta for our Beta distribution
 
         if distribution:
             z_sig = fn.softplus(torch.einsum("bmn,bdmt->bdnt", zw_att, z_sig_)) + 1e-6 # [B,D,N,T]
+            w_lmd = fn.softplus(torch.einsum("bmn,bmt->bnt", zw_att, w_lmd_)) + 1e-6 # [B,N,T]
             qz = Normal(z_mu, z_sig)
-            qw = ApproxBernoulli(logits=w_logits, temperature=torch.full_like(w_logits, self.tau))
+            # qw = ApproxBernoulli(logits=w_logits, temperature=torch.full_like(w_logits, self.tau))
+            qw = BetaPERT(w_m, w_lmd)
         else:
             qz = z_mu
-            qw = logits_to_probs(w_logits, is_binary=True)
+            # qw = logits_to_probs(w_logits, is_binary=True)
+            qw = w_m
 
         # g
         g: torch.Tensor = self.head_g(h) + 1e-6  # type: ignore

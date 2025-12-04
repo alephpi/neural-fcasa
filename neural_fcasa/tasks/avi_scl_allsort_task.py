@@ -13,6 +13,8 @@ from torchaudio.transforms import Spectrogram
 
 from aiaccel.torch.lightning import OptimizerConfig, OptimizerLightningModule
 
+from neural_fcasa.utils.distributions import BetaPERT, NLL_spk_cond
+
 
 @dataclass
 class DumpData:
@@ -91,7 +93,10 @@ class AVITask(OptimizerLightningModule):
         act_ = torch.concat([act, torch.ones([B, 1, T], device=act.device)], dim=1)
 
         act_pit = torch.empty_like(act_)
-        pw = qw.probs
+        # pw = qw.probs 
+        # we don't need rsample since nll_w is in closed form
+        w_alpha = qw.concentration1 # [B, N, T]
+        w_beta = qw.concentration0 # [B, N, T]
         with torch.no_grad():
             # for each sample in a batch, find out the PIT loss
             for b in range(B):
@@ -114,10 +119,16 @@ class AVITask(OptimizerLightningModule):
                 else:
                     raise ValueError(f"Unsupported distribution: {self.distribution=}, should be one of gaussian, student-t, laplace, leptokurtic.")
 
-                nll_w_ = fn.binary_cross_entropy(
-                    repeat(pw[b], "n t -> p n t", p=self.perms.shape[0]),
-                    act_perm_,
-                    reduction="none",
+                # nll_w_ = fn.binary_cross_entropy(
+                #     repeat(pw[b], "n t -> p n t", p=self.perms.shape[0]),
+                #     act_perm_,
+                #     reduction="none",
+                # ).mean(dim=(1, 2))
+
+                nll_w_ = NLL_spk_cond(
+                    alpha=repeat(w_alpha[b], "n t -> p n t", p=self.perms.shape[0]),
+                    beta=repeat(w_beta[b], "n t -> p n t", p=self.perms.shape[0]),
+                    u=act_perm_,
                 ).mean(dim=(1, 2))
 
                 max_indices = (nll_x_ / (F * T) + self.gamma * nll_w_).argmin(dim=0)
@@ -151,10 +162,13 @@ class AVITask(OptimizerLightningModule):
         # calculate kl
         kl = kl_divergence(qz, Normal(0, 1)).sum() / BFT
 
-        nll_w = fn.binary_cross_entropy(qw.probs, act_pit, reduction="mean")
+        # nll_w = fn.binary_cross_entropy(qw.probs, act_pit, reduction="mean")
+        nll_w = NLL_spk_cond(w_alpha, w_beta, act_pit).mean()
+
+        kl_w = kl_divergence(qw, BetaPERT(0.5, 4)).sum() / BFT
 
         # calculate loss
-        loss = nll + self.beta * kl + self.gamma * nll_w
+        loss = nll + self.beta * kl + self.gamma * nll_w + self.beta * kl_w
 
         # logging
         self.log_dict(
@@ -164,6 +178,7 @@ class AVITask(OptimizerLightningModule):
                 f"{log_prefix}/nll": nll,
                 f"{log_prefix}/kl": kl,
                 f"{log_prefix}/nll_w": nll_w,
+                f"{log_prefix}/kl_w": kl_w,
             },
             prog_bar=False,
             on_epoch=True,
@@ -172,11 +187,15 @@ class AVITask(OptimizerLightningModule):
             sync_dist=True,
         )
 
+        dump_alpha = w_alpha.detach()
+        dump_beta = w_beta.detach()
+        dump_m = (dump_alpha-1)/(dump_alpha+dump_beta-2)
+
         self.dump = DumpData(
             logx=xpwr[..., 0, :].log().detach(),
             lm=lm.detach(),
             z=qz.mean.detach(),
-            w=qw.probs.detach(),
+            w=dump_m,
             xt=xt.detach(),
             act=act_pit.detach(),
         )
