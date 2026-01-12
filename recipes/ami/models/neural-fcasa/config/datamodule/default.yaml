@@ -1,6 +1,6 @@
-_target_: neural_fcasa.datamodules.hdf5_wavact_datamodule.DataModule
-train_dataset_path: ${data_dir}/processed_data/hdf5/${dataset_name}-tr.hdf5
-val_dataset_path: ${data_dir}/processed_data/hdf5/${dataset_name}-cv.hdf5
+_target_: neural_fcasa.datamodules.hf_wavact_datamodule.DataModule
+train_dataset_path: ${data_dir}/processed_data/hf_datasets/train
+val_dataset_path: ${data_dir}/processed_data/hf_datasets/val
 batch_size: 2
 duration: 10
 sr: ${sr}

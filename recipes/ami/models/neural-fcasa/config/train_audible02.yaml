@@ -11,13 +11,13 @@ defaults:
 
 datamodule:
   batch_size: 16
-  cached: true
+  keep_in_memory: false
 
 trainer:
   num_nodes: 1
-  devices: 2
-  accumulate_grad_batches: 4
-  max_epochs: 200
+  devices: 4
+  accumulate_grad_batches: 2
+  max_epochs: 400
 
 hydra:
   launcher:
@@ -29,5 +29,5 @@ hydra:
     gpus_per_node: ${trainer.devices}
     cpus_per_task: 16
     tasks_per_node: 2
-    mem_gb: 720
-    timeout_min: 4000
+    mem_gb: 500
+    timeout_min: 1440

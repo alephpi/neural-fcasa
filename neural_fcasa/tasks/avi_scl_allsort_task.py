@@ -63,10 +63,10 @@ class AVITask(OptimizerLightningModule):
         self.dist_param = dist_param
 
     @torch.autocast("cuda", enabled=False)
-    def training_step(self, batch: tuple[torch.Tensor, torch.Tensor], batch_idx, log_prefix: str = "training"):
+    def training_step(self, batch, batch_idx, log_prefix: str = "training"):
         self.dump = None
 
-        wav, act = batch
+        wav, act = batch['wav'], batch['act']
 
         # stft
         x = self.stft(wav)[..., : act.shape[-1]]  # [B, F, M, T]
@@ -208,7 +208,7 @@ class AVITask(OptimizerLightningModule):
                     prog_bar=False,
                     on_epoch=True,
                     on_step=False,
-                    batch_size=batch[0].shape[0],
+                    batch_size=batch["act"].shape[0],
                     sync_dist=True
                 )
         return

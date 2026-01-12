@@ -82,17 +82,23 @@ if __name__ == "__main__":
     #     "Student-t_100": "dist=Student-t-param=100/2025-09-03_08-31-17/0"
     # }
 
+    # CKPT_PATH_DICT = {
+    #     "Leptokurtic_0.4": "dist=Leptokurtic-param=0.4/2025-09-11_18-51-11/0",
+    #     "Leptokurtic_0.8": "dist=Leptokurtic-param=0.8/2025-09-11_18-51-11/0",
+    #     "Leptokurtic_1": "dist=Leptokurtic-param=1/2025-09-11_18-51-10/0",
+    #     "Leptokurtic_1.2": "dist=Leptokurtic-param=1.2/2025-09-11_18-51-10/0",
+    #     "Leptokurtic_1.6": "dist=Leptokurtic-param=1.6/2025-09-11_18-51-10/0",
+    #     "Student-t_0.1": "dist=Student-t-param=0.1/2025-09-11_18-51-11/0",
+    #     "Student-t_1": "dist=Student-t-param=1/2025-09-11_18-51-11/0",
+    #     "Student-t_10": "dist=Student-t-param=10/2025-09-11_18-51-10/0",
+    #     "Student-t_100": "dist=Student-t-param=100/2025-09-11_18-51-11/0"
+    # }
+
     CKPT_PATH_DICT = {
-        "Leptokurtic_0.4": "dist=Leptokurtic-param=0.4/2025-09-11_18-51-11/0",
-        "Leptokurtic_0.8": "dist=Leptokurtic-param=0.8/2025-09-11_18-51-11/0",
-        "Leptokurtic_1": "dist=Leptokurtic-param=1/2025-09-11_18-51-10/0",
-        "Leptokurtic_1.2": "dist=Leptokurtic-param=1.2/2025-09-11_18-51-10/0",
-        "Leptokurtic_1.6": "dist=Leptokurtic-param=1.6/2025-09-11_18-51-10/0",
-        "Student-t_0.1": "dist=Student-t-param=0.1/2025-09-11_18-51-11/0",
-        "Student-t_1": "dist=Student-t-param=1/2025-09-11_18-51-11/0",
-        "Student-t_10": "dist=Student-t-param=10/2025-09-11_18-51-10/0",
-        "Student-t_100": "dist=Student-t-param=100/2025-09-11_18-51-11/0"
+        "Gaussian": "dist=Gaussian-param=None/2025-11-24_18-16-56/0",
+        "Gaussian": "dist=Gaussian-param=None/2025-11-27_22-12-22/0",
     }
+
 
     dst_dir_prefix =ROOT_DIR / "recipes/ami/processed_data/tt/new_eval"
     ckpt_path_prefix = ROOT_DIR / "recipes/ami/models/neural-fcasa/outputs"
