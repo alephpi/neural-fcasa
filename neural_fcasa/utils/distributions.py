@@ -16,4 +16,4 @@ def NLL_spk_cond(alpha, beta, u):
     """
     log likelihood of speaker conditional E_{q(\pi)}[\log p(u|\pi)]
     """
-    return -(u * torch.digamma(alpha) + (1-u)*torch.digamma(beta) + torch.digamma(alpha+beta))
+    return -(u * torch.digamma(alpha) + (1-u)*torch.digamma(beta) - torch.digamma(alpha+beta))
