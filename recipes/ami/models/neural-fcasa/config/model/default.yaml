@@ -4,8 +4,10 @@ hop_length: ${hop_length}
 n_src: ${n_src}
 beta: 1.0
 gamma: 1.0
-distribution: ???
-dist_param: ???
+distribution: Gaussian
+dist_param: null
+beta_prior_m: ???
+beta_prior_lmd: ???
 
 encoder:
   _target_: neural_fcasa.encoders.resepformer_encoder.RESepFormerEncoder

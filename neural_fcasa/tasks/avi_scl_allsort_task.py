@@ -35,10 +35,13 @@ class AVITask(OptimizerLightningModule):
         hop_length: int,
         n_src: int,
         beta: float,
+        # beta2: float,
         gamma: float,
         optimizer_config: OptimizerConfig,
         distribution: str = "Gaussian",
         dist_param: float = 2, # shape parameter for heavy-tailed models, i.e. beta for leptokurtic distribution or nu for student't
+        beta_prior_m: float = 0.5,
+        beta_prior_lmd: float = 4.0,
     ):
         super().__init__(optimizer_config)
 
@@ -53,6 +56,7 @@ class AVITask(OptimizerLightningModule):
         self.hop_length = hop_length
         self.n_src = n_src
         self.beta = beta
+        # self.beta2 = beta2
         self.gamma = gamma
 
         perms = torch.tensor(list(it.permutations(range(0, n_src - 1))))
@@ -61,6 +65,9 @@ class AVITask(OptimizerLightningModule):
 
         self.distribution = distribution
         self.dist_param = dist_param
+
+        self.beta_prior_m = beta_prior_m
+        self.beta_prior_lmd = beta_prior_lmd
 
     @torch.autocast("cuda", enabled=False)
     def training_step(self, batch, batch_idx, log_prefix: str = "training"):
@@ -162,13 +169,16 @@ class AVITask(OptimizerLightningModule):
         # calculate kl
         kl = kl_divergence(qz, Normal(0, 1)).sum() / BFT
 
-        # nll_w = fn.binary_cross_entropy(qw.probs, act_pit, reduction="mean")
+        w_m = (w_alpha-1) / (w_alpha + w_beta - 2)
+        nll_w_bce = fn.binary_cross_entropy(w_m, act_pit, reduction="mean").detach()
+
+        # nll_w_bce = fn.binary_cross_entropy(qw.probs, act_pit, reduction="mean")
         nll_w = NLL_spk_cond(w_alpha, w_beta, act_pit).mean()
 
-        kl_w = kl_divergence(qw, BetaPERT(0.5, 4)).sum() / BFT
+        kl_w = kl_divergence(qw, BetaPERT(self.beta_prior_m, self.beta_prior_lmd)).sum() / BFT
 
         # calculate loss
-        loss = nll + self.beta * kl + self.gamma * nll_w + self.beta * kl_w
+        loss = nll + self.beta * kl + self.gamma * nll_w + kl_w
 
         # logging
         self.log_dict(
@@ -179,6 +189,7 @@ class AVITask(OptimizerLightningModule):
                 f"{log_prefix}/kl": kl,
                 f"{log_prefix}/nll_w": nll_w,
                 f"{log_prefix}/kl_w": kl_w,
+                f"{log_prefix}/nll_w_bce": nll_w_bce,
             },
             prog_bar=False,
             on_epoch=True,
