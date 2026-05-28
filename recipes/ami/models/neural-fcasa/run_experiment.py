@@ -3,8 +3,8 @@ from itertools import zip_longest
 
 def run_train_commands():
     # 基础命令
-    base_command = "python train.py --multirun --config-path=./config --config-name=train_audible01.yaml"
-    # base_command = "python train.py --multirun --config-path=./config --config-name=train_audible02.yaml"
+    # base_command = "python train.py --multirun --config-path=./config --config-name=train_audible01.yaml"
+    base_command = "python train.py --multirun --config-path=./config --config-name=train_audible02.yaml"
     # base_command = "python train.py --multirun --config-path=./config --config-name=train_A40.yaml"
     # base_command = "python train.py --multirun --config-path=./config --config-name=train_V100.yaml"
     
@@ -28,7 +28,7 @@ def run_train_commands():
     # 启动所有命令
     for i, (distribution, dist_param) in enumerate(param_combinations, 1):
         # 使用f表达式构建完整命令
-        full_command = f"{base_command} model.distribution={distribution} model.dist_param={dist_param} &"
+        full_command = f"{base_command} model.distribution={distribution} model.dist_param={dist_param} model.optimizer_config.optimizer_generator.lr=0.001 trainer.max_epochs=400 &"
         print(f"启动命令 {i}/{len(param_combinations)}: {full_command}")
         
         # 执行命令
