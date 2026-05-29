@@ -24,13 +24,6 @@ class DataModule(lt.LightningDataModule):
 
         self.train_dataset_path = train_dataset_path
         self.val_dataset_path = val_dataset_path
-        self.transform = WavActTransform(
-            duration=duration,
-            sr=sr,
-            hop_length=hop_length,
-            randperm_mic=randperm_mic,
-            randperm_spk=randperm_spk
-        )
 
         self.dataset_kwargs: dict[str, Any] = dict(
             duration=duration,
