@@ -6,6 +6,7 @@ beta: 1.0
 gamma: 1.0
 distribution: Gaussian
 dist_param: null
+beta_prior: ???
 beta_prior_m: ???
 beta_prior_lmd: ???
 

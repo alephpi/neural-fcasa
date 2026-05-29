@@ -16,4 +16,4 @@ primary_subdir: beta_prior_m=${model.beta_prior_m}-lmd=${model.beta_prior_lmd}
 output_dir: ${hydra:runtime.output_dir}
 
 dataset_name: chunk.derev-hop${hop_length}
-data_dir: ${working_directory}/../../
+data_dir: ${working_directory}/../../alicorpus
