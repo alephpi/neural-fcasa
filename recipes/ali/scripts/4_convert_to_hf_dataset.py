@@ -29,7 +29,7 @@ def build_example(wav_path, act_path, hop_length):
         act[int(spk), int(np.floor(start * label_resolution)) : int(np.ceil(end * label_resolution))] = 1
 
     return {
-        "wav": wav.astype(np.float32, copy=False),
+        "wav": wav.T.astype(np.float32, copy=False),
         "act": act,
     }
 
