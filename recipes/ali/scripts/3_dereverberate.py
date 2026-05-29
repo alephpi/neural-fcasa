@@ -15,6 +15,10 @@ from wpe import wpe
 import librosa as lr
 import soundfile as sf
 
+
+SCRIPT_ROOT = Path(__file__).resolve().parent
+CORPUS_ROOT = SCRIPT_ROOT.parent / "alicorpus"
+
 # import debugpy
 # try:
 #     debugpy.listen(("localhost", 9500))
@@ -59,18 +63,15 @@ def safe_split_data_one(src_filename, dst_path):
         print(f"Error processing {src_filename}: {e}")
 
 def split_data(args, unk_args):
-    # src_filename_list_all = list((Path(f"./processed_data/{args.mode}") / "mix").glob("*.wav"))
-    from config import data_split
-    src_filename_list = []
-    for scenario_basename in data_split[args.mode]:
-        src_filename_list += list(Path(f"./processed_data/{args.mode}/mix").glob(f"{scenario_basename}*"))
+    src_filename_list = list((CORPUS_ROOT / "processed_data" / args.mode / "mix").glob("*.wav"))
     print(len(src_filename_list))
-   # exclude_list = list((Path(f"./processed_data/{args.mode}") / "derev").glob("*.wav"))
+
+    # exclude_list = list((Path(f"./processed_data/{args.mode}") / "derev").glob("*.wav"))
     # exclude_list = [p.name for p in exclude_list]
     # src_filename_list = [p for p in src_filename_list_all if not p.name in exclude_list]
 
 
-    dst_path = Path(f"./processed_data/{args.mode}") / "derev"
+    dst_path = CORPUS_ROOT / "processed_data" / args.mode / "derev"
     dst_path.mkdir(parents=True, exist_ok=True)
 
     num_cores = 8

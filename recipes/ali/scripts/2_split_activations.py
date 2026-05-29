@@ -4,7 +4,6 @@ from argparse import ArgumentParser
 from functools import partial
 import os
 from pathlib import Path
-from xml.etree import ElementTree
 
 import multiprocessing
 from tqdm import tqdm
@@ -12,27 +11,64 @@ from tqdm import tqdm
 import numpy as np
 import pandas as pd
 
-from config import data_split, dataset_path, metadata_path
+from config import data_split
 
 import soundfile as sf
 
 
-def split_data_one(scenario_path, duration, stepsize, dst_path):
-    scenario = scenario_path.name
-    if scenario in ["IS1003b", "IS1007d"]:
-        return
+SCRIPT_ROOT = Path(__file__).resolve().parent
+CORPUS_ROOT = SCRIPT_ROOT.parent / "alicorpus"
+MODE_TO_SPLIT = {
+    "tr": "train",
+    "cv": "eval",
+    "tt": "test",
+}
 
+
+def resolve_data_roots(mode, rttm_root=None, audio_root=None):
+    split_name = MODE_TO_SPLIT[mode]
+
+    rttm_base = Path(rttm_root) if rttm_root else CORPUS_ROOT / "rttm"
+    audio_base = Path(audio_root) if audio_root else CORPUS_ROOT / "audio" / "far"
+
+    return rttm_base / split_name, audio_base / split_name / "audio_dir"
+
+
+def split_data_one(scenario_name, duration, stepsize, dst_path, rttm_root, audio_root):
+    scenario = Path(scenario_name).name
     segments = []
-    for xml_filename in (metadata_path / "segments").glob(f"{scenario}*.xml"):
-        tree = ElementTree.parse(xml_filename)
-        for child in tree.getroot():
-            start = float(child.attrib["transcriber_start"])
-            end = float(child.attrib["transcriber_end"])
 
-            segments.append((start, end, int(child.attrib["channel"])))
+    speaker_to_idx = {}
+    rttm_file = rttm_root / f"{scenario}.rttm"
+    if not rttm_file.exists():
+        raise FileNotFoundError(f"RTTM not found: {rttm_file}")
+
+    with open(rttm_file) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+
+            fields = line.split()
+            if len(fields) < 8 or fields[0] != "SPEAKER":
+                continue
+
+            start = float(fields[3])
+            end = start + float(fields[4])
+            speaker = fields[7]
+
+            if speaker not in speaker_to_idx:
+                speaker_to_idx[speaker] = len(speaker_to_idx)
+            segments.append((start, end, speaker_to_idx[speaker]))
+
     segments.sort(key=lambda item: item[0])
 
-    wav_duration = sf.info(scenario_path / "audio" / f"{scenario}.Array1-01.wav").duration
+    wav_file = list(audio_root.glob(f"{scenario}*.wav"))
+    if not wav_file:
+        raise FileNotFoundError(f"WAV not found: {scenario}")
+    wav_file = wav_file[0]
+    wav_duration = sf.info(wav_file).duration
+
     for tidx, t_start in enumerate(np.arange(0, wav_duration, stepsize)):
         if wav_duration < (t_end := t_start + duration):
             break
@@ -47,18 +83,24 @@ def split_data_one(scenario_path, duration, stepsize, dst_path):
 
 
 def split_data(args, unk_args):
-    scenario_path_list = []
-    for scenario_basename in data_split[args.mode]:
-        scenario_path_list += list(dataset_path.glob(f"{scenario_basename}*"))
+    scenario_path_list = list(data_split[args.mode])
+    rttm_root, audio_root = resolve_data_roots(args.mode, args.rttm_root, args.audio_root)
 
-    dst_path = Path(f"./processed_data/{args.mode}") / "act"
+    dst_path = CORPUS_ROOT / "processed_data" / args.mode / "act"
     dst_path.mkdir(parents=True, exist_ok=True)
 
     num_cores = os.cpu_count()
 
     # 使用 tqdm 替换 progressbar
     with multiprocessing.Pool(processes=num_cores) as pool:
-        func = partial(split_data_one, duration=args.duration, stepsize=args.stepsize, dst_path=dst_path)
+        func = partial(
+            split_data_one,
+            duration=args.duration,
+            stepsize=args.stepsize,
+            dst_path=dst_path,
+            rttm_root=rttm_root,
+            audio_root=audio_root,
+        )
 
         # 使用 tqdm 包装 pool.imap
         list(tqdm(pool.imap(func, scenario_path_list), 
@@ -105,9 +147,11 @@ def main():
     sub_parsers = parser.add_subparsers()
 
     sub_parser = sub_parsers.add_parser("job", help="split data")
-    sub_parser.add_argument("--mode", type=str, default="tr")
+    sub_parser.add_argument("--mode", type=str, default="tr", choices=["tr", "cv", "tt"])
     sub_parser.add_argument("--duration", type=int, default=20)
     sub_parser.add_argument("--stepsize", type=int, default=10)
+    sub_parser.add_argument("--rttm-root", type=str, default=None)
+    sub_parser.add_argument("--audio-root", type=str, default=None)
     sub_parser.set_defaults(handler=split_data)
 
     sub_parser = sub_parsers.add_parser("sub", help="submit jobs")

@@ -9,36 +9,38 @@ import numpy as np
 from config import data_split, dataset_path
 import soundfile as sf
 
-def split_data_one(scenario_path, duration, stepsize, dst_path):
-    scenario = scenario_path.name
-    if scenario in ["IS1003b", "IS1007d"]:
-        return
+def split_data_one(scenario_file, duration, stepsize, dst_path):
+    scenario_basename = scenario_file.stem.rsplit("_",1)[0]
+    wav_filename = scenario_file
 
-    wav = []
-    for ch in range(1, 8 + 1):
-        wav_filename = scenario_path / "audio" / f"{scenario}.Array1-{ch:02d}.wav"
+    wav, sr = sf.read(wav_filename)
+    if len(wav.shape) > 1:
+        wav = wav[:, 0]
 
-        wav_, sr = sf.read(wav_filename)
-        if len(wav_.shape) > 1:
-            wav_ = wav_[:, 0]
-
-        wav.append(wav_)
-
-    wav = np.stack(wav, axis=-1)
+    wav = np.stack([wav] * 8, axis=-1)
 
     for tidx, t_start in enumerate(range(0, wav.shape[0], sr * stepsize)):
         if wav.shape[0] < (t_end := t_start + sr * duration):
             break
 
-        sf.write(dst_path / f"{scenario}.{tidx:03d}.wav", wav[t_start:t_end], sr)
+        sf.write(dst_path / f"{scenario_basename}.{tidx:03d}.wav", wav[t_start:t_end], sr)
 
 
 def split_data(args, unk_args):
-    scenario_path_list = []
+    scenario_file_list = []
     for scenario_basename in data_split[args.mode]:
-        scenario_path_list += list(dataset_path.glob(f"{scenario_basename}*"))
+        if args.mode == "tr":
+            dataset_path_ = dataset_path / "train" / "audio_dir"
+        elif args.mode == "cv":
+            dataset_path_ = dataset_path / "eval" / "audio_dir"
+        elif args.mode == "tt":
+            dataset_path_ = dataset_path / "test" / "audio_dir"
+        else:
+            raise ValueError(f"unknown mode: {args.mode}")
+        scenario_file_list += list(dataset_path_.glob(f"{scenario_basename}*"))
+    # print(scenario_file_list)
 
-    dst_path = Path(f"./processed_data/{args.mode}") / "mix"
+    dst_path = Path(f"./alicorpus/processed_data/{args.mode}") / "mix"
     dst_path.mkdir(parents=True, exist_ok=True)
 
     num_cores = os.cpu_count()
@@ -48,8 +50,8 @@ def split_data(args, unk_args):
         func = partial(split_data_one, duration=args.duration, stepsize=args.stepsize, dst_path=dst_path)
 
         # 使用 tqdm 包装 pool.imap
-        list(tqdm(pool.imap(func, scenario_path_list), 
-                  total=len(scenario_path_list), 
+        list(tqdm(pool.imap(func, scenario_file_list), 
+                  total=len(scenario_file_list), 
                   desc='Processing scenarios', 
                   unit='scenario'))
 
