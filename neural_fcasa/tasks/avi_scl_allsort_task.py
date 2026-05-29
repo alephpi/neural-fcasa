@@ -35,11 +35,11 @@ class AVITask(OptimizerLightningModule):
         hop_length: int,
         n_src: int,
         beta: float,
-        # beta2: float,
         gamma: float,
         optimizer_config: OptimizerConfig,
         distribution: str = "Gaussian",
         dist_param: float = 2, # shape parameter for heavy-tailed models, i.e. beta for leptokurtic distribution or nu for student't
+        beta_prior: bool = False,
         beta_prior_m: float = 0.5,
         beta_prior_lmd: float = 4.0,
     ):
@@ -56,7 +56,6 @@ class AVITask(OptimizerLightningModule):
         self.hop_length = hop_length
         self.n_src = n_src
         self.beta = beta
-        # self.beta2 = beta2
         self.gamma = gamma
 
         perms = torch.tensor(list(it.permutations(range(0, n_src - 1))))
@@ -66,6 +65,7 @@ class AVITask(OptimizerLightningModule):
         self.distribution = distribution
         self.dist_param = dist_param
 
+        self.beta_prior = beta_prior
         self.beta_prior_m = beta_prior_m
         self.beta_prior_lmd = beta_prior_lmd
 
@@ -100,10 +100,12 @@ class AVITask(OptimizerLightningModule):
         act_ = torch.concat([act, torch.ones([B, 1, T], device=act.device)], dim=1)
 
         act_pit = torch.empty_like(act_)
-        # pw = qw.probs 
-        # we don't need rsample since nll_w is in closed form
-        w_alpha = qw.concentration1 # [B, N, T]
-        w_beta = qw.concentration0 # [B, N, T]
+        if self.beta_prior:
+            # we don't need rsample since nll_w is in closed form
+            w_alpha = qw.concentration1 # [B, N, T]
+            w_beta = qw.concentration0 # [B, N, T]
+        else:
+            pw = qw.probs
         with torch.no_grad():
             # for each sample in a batch, find out the PIT loss
             for b in range(B):
@@ -126,17 +128,20 @@ class AVITask(OptimizerLightningModule):
                 else:
                     raise ValueError(f"Unsupported distribution: {self.distribution=}, should be one of gaussian, student-t, laplace, leptokurtic.")
 
-                # nll_w_ = fn.binary_cross_entropy(
-                #     repeat(pw[b], "n t -> p n t", p=self.perms.shape[0]),
-                #     act_perm_,
-                #     reduction="none",
-                # ).mean(dim=(1, 2))
 
-                nll_w_ = NLL_spk_cond(
-                    alpha=repeat(w_alpha[b], "n t -> p n t", p=self.perms.shape[0]),
-                    beta=repeat(w_beta[b], "n t -> p n t", p=self.perms.shape[0]),
-                    u=act_perm_,
-                ).mean(dim=(1, 2))
+                if self.beta_prior:
+                    nll_w_ = NLL_spk_cond(
+                        alpha=repeat(w_alpha[b], "n t -> p n t", p=self.perms.shape[0]),
+                        beta=repeat(w_beta[b], "n t -> p n t", p=self.perms.shape[0]),
+                        u=act_perm_,
+                    ).mean(dim=(1, 2))
+                else:
+                    nll_w_ = fn.binary_cross_entropy(
+                        repeat(pw[b], "n t -> p n t", p=self.perms.shape[0]),
+                        act_perm_,
+                        reduction="none",
+                    ).mean(dim=(1, 2))
+
 
                 max_indices = (nll_x_ / (F * T) + self.gamma * nll_w_).argmin(dim=0)
                 act_pit[b] = act_[b, self.perms[max_indices]]
@@ -169,47 +174,79 @@ class AVITask(OptimizerLightningModule):
         # calculate kl
         kl = kl_divergence(qz, Normal(0, 1)).sum() / BFT
 
-        w_m = (w_alpha-1) / (w_alpha + w_beta - 2)
-        nll_w_bce = fn.binary_cross_entropy(w_m, act_pit, reduction="mean").detach()
 
-        # nll_w_bce = fn.binary_cross_entropy(qw.probs, act_pit, reduction="mean")
-        nll_w = NLL_spk_cond(w_alpha, w_beta, act_pit).mean()
+        if self.beta_prior:
+            w_m = (w_alpha-1) / (w_alpha + w_beta - 2)
+            nll_w_bce = fn.binary_cross_entropy(w_m, act_pit, reduction="mean").detach()
 
-        kl_w = kl_divergence(qw, BetaPERT(self.beta_prior_m, self.beta_prior_lmd)).sum() / BFT
+            nll_w = NLL_spk_cond(w_alpha, w_beta, act_pit).mean()
 
+            kl_w = kl_divergence(qw, BetaPERT(self.beta_prior_m, self.beta_prior_lmd)).sum() / BFT
+
+        else:
+            nll_w = fn.binary_cross_entropy(qw.probs, act_pit, reduction="mean")
         # calculate loss
-        loss = nll + self.beta * kl + self.gamma * nll_w + kl_w
+        if self.beta_prior:
+            loss = nll + self.beta * kl + self.gamma * nll_w + kl_w
+        else:
+            loss = nll + self.beta * kl + self.gamma * nll_w
 
         # logging
-        self.log_dict(
-            {
-                "step": float(self.trainer.current_epoch),
-                f"{log_prefix}/loss": loss,
-                f"{log_prefix}/nll": nll,
-                f"{log_prefix}/kl": kl,
-                f"{log_prefix}/nll_w": nll_w,
-                f"{log_prefix}/kl_w": kl_w,
-                f"{log_prefix}/nll_w_bce": nll_w_bce,
-            },
-            prog_bar=False,
-            on_epoch=True,
-            on_step=False,
-            batch_size=x.shape[0],
-            sync_dist=True,
-        )
+        if self.beta_prior:
+            self.log_dict(
+                {
+                    "step": float(self.trainer.current_epoch),
+                    f"{log_prefix}/loss": loss,
+                    f"{log_prefix}/nll": nll,
+                    f"{log_prefix}/kl": kl,
+                    f"{log_prefix}/nll_w": nll_w,
+                    f"{log_prefix}/kl_w": kl_w,
+                    f"{log_prefix}/nll_w_bce": nll_w_bce,
+                },
+                prog_bar=False,
+                on_epoch=True,
+                on_step=False,
+                batch_size=x.shape[0],
+                sync_dist=True,
+            )
 
-        dump_alpha = w_alpha.detach()
-        dump_beta = w_beta.detach()
-        dump_m = (dump_alpha-1)/(dump_alpha+dump_beta-2)
+            dump_alpha = w_alpha.detach()
+            dump_beta = w_beta.detach()
+            dump_m = (dump_alpha-1)/(dump_alpha+dump_beta-2)
 
-        self.dump = DumpData(
-            logx=xpwr[..., 0, :].log().detach(),
-            lm=lm.detach(),
-            z=qz.mean.detach(),
-            w=dump_m,
-            xt=xt.detach(),
-            act=act_pit.detach(),
-        )
+            self.dump = DumpData(
+                logx=xpwr[..., 0, :].log().detach(),
+                lm=lm.detach(),
+                z=qz.mean.detach(),
+                w=dump_m,
+                xt=xt.detach(),
+                act=act_pit.detach(),
+            )
+        
+        else:
+            self.log_dict(
+                {
+                    "step": float(self.trainer.current_epoch),
+                    f"{log_prefix}/loss": loss,
+                    f"{log_prefix}/nll": nll,
+                    f"{log_prefix}/kl": kl,
+                    f"{log_prefix}/nll_w": nll_w,
+                },
+                prog_bar=False,
+                on_epoch=True,
+                on_step=False,
+                batch_size=x.shape[0],
+                sync_dist=True,
+            )
+
+            self.dump = DumpData(
+                logx=xpwr[..., 0, :].log().detach(),
+                lm=lm.detach(),
+                z=qz.mean.detach(),
+                w=qw.probs.detach(),
+                xt=xt.detach(),
+                act=act_pit.detach(),
+            )
 
         return loss
 

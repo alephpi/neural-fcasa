@@ -164,6 +164,7 @@ class RESepFormerEncoder(nn.Module):
         autocast: bool = True,
         use_jit: bool = True,
         spec_aug: nn.Module | None = None,
+        beta_prior: bool = False,
     ):
         super().__init__()
 
@@ -172,6 +173,7 @@ class RESepFormerEncoder(nn.Module):
         self.n_blocks = n_blocks
 
         self.tau = tau
+        self.beta_prior = beta_prior
 
         self.tf = nn.ModuleList()
         for _ in range(n_blocks):
@@ -204,12 +206,20 @@ class RESepFormerEncoder(nn.Module):
             Rearrange("(b m) t (c d) -> c b d m t", m=n_mic, c=2, d=dim_latent),
         )
 
-        self.head_w_val = nn.Sequential(
-            nn.Linear(d_model, d_model),
-            nn.PReLU(),
-            nn.Linear(d_model, 2),
-            Rearrange("(b m) t c -> c b m t", m=n_mic, c=2),
-        )
+        if self.beta_prior:
+            self.head_w_val = nn.Sequential(
+                nn.Linear(d_model, d_model),
+                nn.PReLU(),
+                nn.Linear(d_model, 2),
+                Rearrange("(b m) t c -> c b m t", m=n_mic, c=2),
+            )
+        else:
+            self.head_w_val = nn.Sequential(
+                nn.Linear(d_model, d_model),
+                nn.PReLU(),
+                nn.Linear(d_model, 1),
+                Rearrange("(b m) t 1 -> b m t", m=n_mic),
+            )
 
         self.head_zw_att = nn.Sequential(
             nn.Linear(d_model, d_model),
@@ -247,27 +257,36 @@ class RESepFormerEncoder(nn.Module):
 
         # z
         z_mu_, z_sig_ = self.head_z_val(h)  # [B,D,M,T]
-        # w, mode m and concentration lambda
-        w_m_, w_lmd_ = self.head_w_val(h) # [B,M,T]
+        if self.beta_prior:
+            # w, mode m and concentration lambda
+            w_m_, w_lmd_ = self.head_w_val(h) # [B,M,T]
+        else:
+            w_logits_ = self.head_w_val(h) # [B,M,T]
 
         ## merge along microphone to revert the source
         z_mu: torch.Tensor = torch.einsum("bmn,bdmt->bdnt", zw_att, z_mu_) # [B,D,N,T]
-        # w_logits = torch.einsum("bmn,bmt->bnt", zw_att, w_logits_) # [B,N,T]
+        if self.beta_prior:
+            w_m = torch.sigmoid(torch.einsum("bmn,bmt->bnt", zw_att, w_m_)) # [B,N,T]
+        else:
+            w_logits = torch.einsum("bmn,bmt->bnt", zw_att, w_logits_) # [B,N,T]
 
-        w_m = torch.sigmoid(torch.einsum("bmn,bmt->bnt", zw_att, w_m_)) # [B,N,T]
 
         # we should mimic w_logits inference to get shape parameters \alpha and \beta for our Beta distribution
 
         if distribution:
             z_sig = fn.softplus(torch.einsum("bmn,bdmt->bdnt", zw_att, z_sig_)) + 1e-6 # [B,D,N,T]
-            w_lmd = fn.softplus(torch.einsum("bmn,bmt->bnt", zw_att, w_lmd_)) + 1e-6 # [B,N,T]
             qz = Normal(z_mu, z_sig)
-            # qw = ApproxBernoulli(logits=w_logits, temperature=torch.full_like(w_logits, self.tau))
-            qw = BetaPERT(w_m, w_lmd)
+            if self.beta_prior:
+                w_lmd = fn.softplus(torch.einsum("bmn,bmt->bnt", zw_att, w_lmd_)) + 1e-6 # [B,N,T]
+                qw = BetaPERT(w_m, w_lmd)
+            else:
+                qw = ApproxBernoulli(logits=w_logits, temperature=torch.full_like(w_logits, self.tau))
         else:
             qz = z_mu
-            # qw = logits_to_probs(w_logits, is_binary=True)
-            qw = w_m
+            if self.beta_prior:
+                qw = w_m
+            else:
+                qw = logits_to_probs(w_logits, is_binary=True)
 
         # g
         g: torch.Tensor = self.head_g(h) + 1e-6  # type: ignore
