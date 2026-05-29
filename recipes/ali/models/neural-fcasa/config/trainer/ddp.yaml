@@ -1,0 +1,14 @@
+defaults:
+  - default
+
+strategy: ddp
+accelerator: gpu
+devices: 2
+num_nodes: 1
+precision: 16-mixed
+
+max_epochs: 200
+gradient_clip_val: 5.0
+benchmark: True
+sync_batchnorm: True
+use_distributed_sampler: True

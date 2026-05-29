@@ -10,23 +10,24 @@ defaults:
   - _self_
 
 datamodule:
-  batch_size: 8
+  batch_size: 16
+  keep_in_memory: false
 
 trainer:
-  num_nodes: 2
-  devices: 2
-  accumulate_grad_batches: 4
-  max_epochs: 200
+  num_nodes: 1
+  devices: 4
+  accumulate_grad_batches: 2
+  max_epochs: 400
 
 hydra:
   launcher:
     submitit_folder: ${hydra.sweep.dir}/.submitit/%j
     name: neural-fcasa
-    partition: A40
+    partition: audible
     nodes: ${trainer.num_nodes}
-    # exclude: node[29,35]
+    exclude: nodeaudible01
     gpus_per_node: ${trainer.devices}
-    cpus_per_task: 20
+    cpus_per_task: 16
     tasks_per_node: 2
-    mem_gb: 110
-    timeout_min: 4000
+    mem_gb: 500
+    timeout_min: 1440
