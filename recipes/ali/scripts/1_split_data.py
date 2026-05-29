@@ -14,10 +14,6 @@ def split_data_one(scenario_file, duration, stepsize, dst_path):
     wav_filename = scenario_file
 
     wav, sr = sf.read(wav_filename)
-    if len(wav.shape) > 1:
-        wav = wav[:, 0]
-
-    wav = np.stack([wav] * 8, axis=-1)
 
     for tidx, t_start in enumerate(range(0, wav.shape[0], sr * stepsize)):
         if wav.shape[0] < (t_end := t_start + sr * duration):
