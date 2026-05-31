@@ -23,6 +23,7 @@ encoder:
   n_blocks: 8
   norm_first: True
   autocast: ${autocast}
+  beta_prior: ${model.beta_prior}
 
   diagonalizer:
     _target_: neural_fcasa.diagonalizers.iss_nrmxt_diagonalizer.ISSDiagonalizer
