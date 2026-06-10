@@ -46,12 +46,14 @@ def split_data_one(src_filename, dst_path):
         M, F, T = src_spec.shape
 
         if (cp.abs(src_spec) ** 2).max(axis=0).min() == 0:
-            # if it is silent somewhere, we just output the original audio
-            # dst_wav = src_wav
-            # sf.write(dst_path / src_filename.name, dst_wav, sr, "PCM_24")
+            # if it is silent somewhere, we just skip
             return
 
         dst_spec = wpe(src_spec.transpose(1,0,2), taps=10, delay=3)
+        if cp.isnan(dst_spec).any():
+            # if there is any NaN, we just skip
+            print(f"NaN found in {src_filename}, skipping.")
+            return
 
         dst_wav = lr.istft(dst_spec.get().transpose(1, 0, 2), hop_length=160).T
     sf.write(dst_path / src_filename.name, dst_wav, sr, "PCM_16")

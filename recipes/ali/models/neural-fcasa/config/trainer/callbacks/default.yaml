@@ -11,6 +11,7 @@
   save_top_k: 100
   monitor: val_loss
   mode: min
+  enable_version_counter: false
 
 - _target_: neural_fcasa.callbacks.best_model_saver.BestModelSaverCallback
 

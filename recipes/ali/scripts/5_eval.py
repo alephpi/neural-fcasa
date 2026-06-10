@@ -223,7 +223,7 @@ if __name__ == "__main__":
     # except Exception as e:
     #     pass
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ref_rttm_dir", type=str, default="/home/ids/smao-22/phd/neural-fcasa/recipes/ami/processed_data/tt/rttm",help="reference label rttm")
+    parser.add_argument("--ref_rttm_dir", type=str, default="/home/ids/smao-22/phd/neural-fcasa/recipes/ali/alicorpus/processed_data/tt/rttm",help="reference label rttm")
     parser.add_argument("--sys_rttm_dir", type=str, help="system rttm directory")
     parser.add_argument("--diar_dir", type=str, help="system diar directory")
     args = parser.parse_args()

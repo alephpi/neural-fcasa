@@ -10,7 +10,7 @@ from datasets import Dataset, DatasetDict
 DATA_ROOT = Path("/home/ids/smao-22/phd/neural-fcasa/recipes/ali/alicorpus/processed_data")
 SPLITS = {
     "train": "tr",
-    # "val": "cv",
+    "val": "cv",
     "test": "tt",
 }
 
