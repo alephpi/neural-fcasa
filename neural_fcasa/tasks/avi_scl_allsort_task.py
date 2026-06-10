@@ -81,6 +81,8 @@ class AVITask(OptimizerLightningModule):
         B, F, M, T = x.shape
         BFT = B * F * T
 
+        # assert torch.isnan(x).sum() == 0, "NaN found in input spectrogram"
+
         # encode
         # qz: latent spectral characteristics
         # qw: speaker activity mask

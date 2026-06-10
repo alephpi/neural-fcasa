@@ -136,9 +136,12 @@ class ReSepFormerModule(nn.Module):
         if h0 is None:
             h0 = torch.zeros_like(h)
 
-        with torch.autocast("cuda", dtype=torch.float16, enabled=self.autocast):
-            h = self.enc(self.lin1(torch.concat((h, h0), dim=-1)))
-        h = h.to(torch.float32)
+        # with torch.autocast("cuda", dtype=torch.bfloat16, enabled=self.autocast):
+        h = self.enc(self.lin1(torch.concat((h, h0), dim=-1)))
+        # h = h.to(torch.float32)
+
+        if torch.isnan(h).sum() > 0:
+            raise ValueError(f"NaN found in h:\n{h=}\n{logx=}")
 
         return h + h0, self.head_r(self.overlapped_add(h, T))
 
@@ -265,6 +268,8 @@ class RESepFormerEncoder(nn.Module):
 
         ## merge along microphone to revert the source
         z_mu: torch.Tensor = torch.einsum("bmn,bdmt->bdnt", zw_att, z_mu_) # [B,D,N,T]
+        assert torch.isnan(z_mu).sum() == 0, f"{z_mu=}\n{zw_att=}\n{z_mu_=}\n{h=}\n{x=}"
+
         if self.beta_prior:
             w_m = torch.sigmoid(torch.einsum("bmn,bmt->bnt", zw_att, w_m_)) # [B,N,T]
         else:
