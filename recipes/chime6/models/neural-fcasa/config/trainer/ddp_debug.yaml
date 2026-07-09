@@ -1,0 +1,10 @@
+defaults:
+  - ddp
+  - _self_
+
+num_nodes: 1
+devices: 1
+accumulate_grad_batches: 1
+limit_train_batches: 2
+limit_val_batches: 2
+max_epochs: 4

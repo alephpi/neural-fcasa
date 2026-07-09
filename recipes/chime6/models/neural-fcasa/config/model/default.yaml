@@ -1,0 +1,53 @@
+_target_: neural_fcasa.tasks.avi_scl_allsort_task.AVITask
+n_fft: ${n_fft}
+hop_length: ${hop_length}
+n_src: ${n_src}
+beta: 1.0
+gamma: 1.0
+distribution: Gaussian
+dist_param: null
+beta_prior: ???
+beta_prior_m: ???
+beta_prior_lmd: ???
+
+encoder:
+  _target_: neural_fcasa.encoders.resepformer_encoder.RESepFormerEncoder
+  n_fft: ${n_fft}
+  n_mic: ${n_mic}
+  n_src: ${n_src}
+  dim_latent: ${dim_latent}
+  chunk_size: 100
+  step_size: 100
+  d_model: 256
+  dim_feedforward: 1024
+  n_blocks: 8
+  norm_first: True
+  autocast: ${autocast}
+  beta_prior: ${model.beta_prior}
+
+  diagonalizer:
+    _target_: neural_fcasa.diagonalizers.iss_nrmxt_diagonalizer.ISSDiagonalizer
+    eps: 1.e-4
+    n_iter: 2
+
+  spec_aug:
+    _target_: torchaudio.transforms.SpecAugment
+    n_time_masks: 2
+    time_mask_param: 64
+    n_freq_masks: 2
+    freq_mask_param: 20
+    zero_masking: True
+
+decoder:
+  _target_: neural_fcasa.decoders.res_lin_decoder.Decoder
+  n_fft: ${n_fft}
+  dim_latent: ${dim_latent}
+  dim_latent_noi: 10
+
+optimizer_config:
+  _target_: aiaccel.torch.lightning.OptimizerConfig
+  optimizer_generator:
+    _partial_: True
+    _target_: torch.optim.AdamW
+    lr: 1.e-4
+    weight_decay: 1.e-5

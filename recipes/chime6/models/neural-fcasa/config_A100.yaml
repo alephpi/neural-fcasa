@@ -1,0 +1,9 @@
+base_config: config.yaml
+trainer:
+  devices: 3
+  num_nodes: 4
+  callbacks:
+    - _target_: lightning.pytorch.callbacks.ModelCheckpoint
+      every_n_epochs: 10
+datamodule:
+  batch_size: 10

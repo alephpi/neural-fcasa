@@ -10,30 +10,15 @@ def run_train_commands():
     
     # 定义参数值
 
-    # leptokurtic_params = [0.4, 0.8, 1, 1.2, 1.6]
-    leptokurtic_params = []
     Gaussian_params = [ ]
-    student_t_params = [0.1, 1.0]
     
     # leptokurtic_params = [("Leptokurtic", p) for p in leptokurtic_params]
-    Gaussian_params = [("Gaussian", p) for p in Gaussian_params]
-    student_t_params = [("Student-t", p) for p in student_t_params]
-
-    # 交替执行，保证实验多样性
-    param_combinations = []
-    
-    for param1, param2, param3 in zip_longest(Gaussian_params, leptokurtic_params, student_t_params):
-        if param1 is not None:
-            param_combinations.append(param1)
-        if param2 is not None:
-            param_combinations.append(param2)
-        if param3 is not None:
-            param_combinations.append(param3)
+    param_combinations = [(True, 0.5, 4.0), (True, 0.3, 4.0)]
 
     # 启动所有命令
-    for i, (distribution, dist_param) in enumerate(param_combinations, 1):
+    for i, (beta_prior, beta_m, beta_lmd) in enumerate(param_combinations, 1):
         # 使用f表达式构建完整命令
-        full_command = f"{base_command} model.distribution={distribution} model.dist_param={dist_param} model.beta_prior=False model.beta_prior_m=0.5 model.beta_prior_lmd=4.0 &"
+        full_command = f"{base_command} model.distribution=Gaussian model.dist_param=None model.beta_prior={beta_prior} model.beta_prior_m={beta_m} model.beta_prior_lmd={beta_lmd} &"
         print(f"启动命令 {i}/{len(param_combinations)}: {full_command}")
         
         # 执行命令

@@ -32,7 +32,7 @@ hydra:
     tasks_per_node: ${trainer.devices}
     mem_gb: 500
     timeout_min: 1440
-    max_num_timeout: 3
+    max_num_timeout: 2
     setup:
       - module load cuda
       - source /home/ids/smao-22/phd/neural-fcasa/.venv/bin/activate

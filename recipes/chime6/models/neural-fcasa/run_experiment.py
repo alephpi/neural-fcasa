@@ -12,7 +12,7 @@ def run_train_commands():
 
     # leptokurtic_params = [0.4, 0.8, 1, 1.2, 1.6]
     leptokurtic_params = []
-    Gaussian_params = [ ]
+    Gaussian_params = [2]
     student_t_params = [0.1, 1.0]
     
     # leptokurtic_params = [("Leptokurtic", p) for p in leptokurtic_params]

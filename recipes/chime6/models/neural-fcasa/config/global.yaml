@@ -11,10 +11,10 @@ dim_latent: 64
 
 autocast: True
 working_directory: .
-# primary_subdir: dist=${model.distribution}-param=${model.dist_param}
-primary_subdir: beta_prior_m=${model.beta_prior_m}-lmd=${model.beta_prior_lmd}
+primary_subdir: dist=${model.distribution}-param=${model.dist_param}
+# primary_subdir: beta_prior_m=${model.beta_prior_m}-lmd=${model.beta_prior_lmd}
 output_dir: ${hydra:runtime.output_dir}
 ckpt_dir: ${working_directory}/outputs/${primary_subdir}/checkpoints
 
 dataset_name: chunk.derev-hop${hop_length}
-data_dir: ${working_directory}/../../alicorpus
+data_dir: ${working_directory}/../../chime6corpus
