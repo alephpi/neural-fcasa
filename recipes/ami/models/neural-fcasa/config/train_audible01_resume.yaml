@@ -17,13 +17,13 @@ trainer:
   num_nodes: 1
   devices: 4
   accumulate_grad_batches: 4
-  max_epochs: 400
+  max_epochs: 200
 
 hydra:
   launcher:
     submitit_folder: ${hydra.sweep.dir}/.submitit/%j
     name: neural-fcasa
-    partition: audible
+    partition: A100
     nodes: ${trainer.num_nodes}
     exclude: nodeaudible02
     gpus_per_node: ${trainer.devices}
@@ -31,7 +31,15 @@ hydra:
     tasks_per_node: ${trainer.devices}
     mem_gb: 500
     timeout_min: 1440
+    additional_parameters: {'nodelist': 'nodeaudible01'}
     setup:
+      - export TORCH_DISTRIBUTED_DEBUG=DETAIL
+      - module load cuda
       - source /home/ids/smao-22/phd/neural-fcasa/.venv/bin/activate
+      - export NCCL_IB_DISABLE=1
+      - export NCCL_P2P_LEVEL=NVL
+      - export NCCL_DEBUG=INFO
+      - export NCCL_SOCKET_IFNAME=$(ip route get 8.8.8.8 | awk '{print $5; exit}')
+    srun_args: ["--cpu-bind=cores"]
 
-ckpt_path: '/home/ids/smao-22/phd/neural-fcasa/recipes/ami/models/neural-fcasa/outputs/beta_prior_m=0.5-lmd=10/2026-02-03_10-18-18/0/checkpoints/last.ckpt'
+ckpt_path: ${ckpt_dir}/last.ckpt

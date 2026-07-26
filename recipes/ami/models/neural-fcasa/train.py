@@ -19,6 +19,9 @@ def main(cfg) -> None:
     datamodule = instantiate(cfg.datamodule)
     # Resume from checkpoint if provided
     ckpt_path = getattr(cfg, "ckpt_path", None)
+    if ckpt_path and not os.path.exists(ckpt_path):
+        ckpt_path = None
+        print(f"Checkpoint path {ckpt_path} does not exist. Starting training from scratch.")
 
     fit_kwargs = dict(model=model, datamodule=datamodule, ckpt_path=ckpt_path)
     trainer.fit(**fit_kwargs)

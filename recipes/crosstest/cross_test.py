@@ -13,12 +13,11 @@ DATASETS = {
         "ref_rttm_dir": ROOT_DIR / "recipes/ami/processed_data/tt/rttm",
         "ckpt_root": ROOT_DIR / "recipes/ami/models/neural-fcasa/outputs",
         "ckpts": {
-            # "Gaussian": "dist=Gaussian-param=None/2025-09-02_12-50-49/0/checkpoints/last.ckpt",
-            # "Student-t_0.1": "dist=Student-t-param=0.1/2025-09-03_08-31-17/0/checkpoints/last.ckpt",
-            # "Student-t_1.0": "dist=Student-t-param=1/2025-09-03_08-31-18/0/checkpoints/last.ckpt",
-            "Gaussian": "dist=Gaussian-param=None/checkpoints/last.ckpt",
-            "Student-t_0.1": "dist=Student-t-param=0.1/checkpoints/last.ckpt",
-            "Student-t_1.0": "dist=Student-t-param=1/checkpoints/last.ckpt",
+        #    "Gaussian": "dist=Gaussian-param=None/checkpoints/last.ckpt",
+        #     "Student-t_0.1": "dist=Student-t-param=0.1/checkpoints/last.ckpt",
+        #     "Student-t_1.0": "dist=Student-t-param=1/checkpoints/last.ckpt",
+            "beta_prior_m=0.3-lmd=4.0":"beta_prior_m=0.3-lmd=4/checkpoints/epoch=200-val_loss=-34.0389.ckpt",
+            "beta_prior_m=0.5-lmd=4.0":"beta_prior_m=0.5-lmd=10/checkpoints/epoch=198-val_loss=-33.7312.ckpt",
         },
     },
     "ali": {
@@ -26,9 +25,11 @@ DATASETS = {
         "ref_rttm_dir": ROOT_DIR / "recipes/ali/alicorpus/processed_data/tt/rttm",
         "ckpt_root": ROOT_DIR / "recipes/ali/models/neural-fcasa/outputs",
         "ckpts": {
-            "Gaussian": "dist=Gaussian-param=2/checkpoints/epoch=196-val_loss=-39.5421.ckpt",
-            "Student-t_0.1": "dist=Student-t-param=0.1/checkpoints/epoch=196-val_loss=-8.3335.ckpt",
-            "Student-t_1.0": "dist=Student-t-param=1.0/checkpoints/epoch=196-val_loss=-25.0198.ckpt",
+            # "Gaussian": "dist=Gaussian-param=2/checkpoints/epoch=196-val_loss=-39.5421.ckpt",
+            # "Student-t_0.1": "dist=Student-t-param=0.1/checkpoints/epoch=196-val_loss=-8.3335.ckpt",
+            # "Student-t_1.0": "dist=Student-t-param=1.0/checkpoints/epoch=196-val_loss=-25.0198.ckpt",
+            "beta_prior_m=0.3-lmd=4.0": "beta_prior_m=0.3-lmd=4.0/checkpoints/epoch=199-val_loss=-39.7457.ckpt",
+            "beta_prior_m=0.5-lmd=4.0": "beta_prior_m=0.5-lmd=4.0/checkpoints/epoch=199-val_loss=-39.6821.ckpt"
         },
     },
     "chime6": {
@@ -36,9 +37,11 @@ DATASETS = {
         "ref_rttm_dir": ROOT_DIR / "recipes/chime6/chime6corpus/processed_data/tt/rttm",
         "ckpt_root": ROOT_DIR / "recipes/chime6/models/neural-fcasa/outputs",
         "ckpts": {
-            "Gaussian": "dist=Gaussian-param=2/checkpoints/epoch=199-val_loss=-23.2146.ckpt",
-            "Student-t_0.1": "dist=Student-t-param=0.1/checkpoints/epoch=197-val_loss=7.7501.ckpt",
-            "Student-t_1.0": "dist=Student-t-param=1.0/checkpoints/epoch=199-val_loss=-8.7330.ckpt",
+            # "Gaussian": "dist=Gaussian-param=2/checkpoints/epoch=199-val_loss=-23.2146.ckpt",
+            # "Student-t_0.1": "dist=Student-t-param=0.1/checkpoints/epoch=197-val_loss=7.7501.ckpt",
+            # "Student-t_1.0": "dist=Student-t-param=1.0/checkpoints/epoch=199-val_loss=-8.7330.ckpt",
+            "beta_prior_m=0.3-lmd=4.0": "beta_prior_m=0.3-lmd=4.0/checkpoints/epoch=194-val_loss=-23.0167.ckpt",
+            "beta_prior_m=0.5-lmd=4.0": "beta_prior_m=0.5-lmd=4.0/checkpoints/epoch=186-val_loss=-23.0583.ckpt"
         }
     },
 }
@@ -117,7 +120,7 @@ def main(train_dataset, test_dataset, ckpt_path):
 
 
 if __name__ == "__main__":
-    train_test_pairs = [(train_dataset, test_dataset) for train_dataset, test_dataset in product(DATASETS.keys(), repeat=2) if (train_dataset != "ami") and (test_dataset == "ami")]
+    train_test_pairs = [(train_dataset, test_dataset) for train_dataset, test_dataset in product(DATASETS.keys(), repeat=2) if (train_dataset == "ami")]
     print(train_test_pairs)
     for train_dataset, test_dataset in train_test_pairs:
         for ckpt_label, ckpt_path_suffix in DATASETS[train_dataset]["ckpts"].items():
