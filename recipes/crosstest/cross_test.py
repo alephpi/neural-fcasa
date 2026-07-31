@@ -16,8 +16,9 @@ DATASETS = {
         #    "Gaussian": "dist=Gaussian-param=None/checkpoints/last.ckpt",
         #     "Student-t_0.1": "dist=Student-t-param=0.1/checkpoints/last.ckpt",
         #     "Student-t_1.0": "dist=Student-t-param=1/checkpoints/last.ckpt",
-            "beta_prior_m=0.3-lmd=4.0":"beta_prior_m=0.3-lmd=4/checkpoints/epoch=200-val_loss=-34.0389.ckpt",
-            "beta_prior_m=0.5-lmd=4.0":"beta_prior_m=0.5-lmd=10/checkpoints/epoch=198-val_loss=-33.7312.ckpt",
+            # "beta_prior_m=0.3-lmd=4.0":"beta_prior_m=0.3-lmd=4/checkpoints/epoch=200-val_loss=-34.0389.ckpt",
+            # "beta_prior_m=0.5-lmd=4.0":"beta_prior_m=0.5-lmd=10/checkpoints/epoch=198-val_loss=-33.7312.ckpt",
+            "joint": "dist=Student-t-param=1-beta_prior_m=0.5-lmd=4.0/checkpoints/last.ckpt"
         },
     },
     "ali": {
@@ -28,8 +29,9 @@ DATASETS = {
             # "Gaussian": "dist=Gaussian-param=2/checkpoints/epoch=196-val_loss=-39.5421.ckpt",
             # "Student-t_0.1": "dist=Student-t-param=0.1/checkpoints/epoch=196-val_loss=-8.3335.ckpt",
             # "Student-t_1.0": "dist=Student-t-param=1.0/checkpoints/epoch=196-val_loss=-25.0198.ckpt",
-            "beta_prior_m=0.3-lmd=4.0": "beta_prior_m=0.3-lmd=4.0/checkpoints/epoch=199-val_loss=-39.7457.ckpt",
-            "beta_prior_m=0.5-lmd=4.0": "beta_prior_m=0.5-lmd=4.0/checkpoints/epoch=199-val_loss=-39.6821.ckpt"
+            # "beta_prior_m=0.3-lmd=4.0": "beta_prior_m=0.3-lmd=4.0/checkpoints/epoch=199-val_loss=-39.7457.ckpt",
+            # "beta_prior_m=0.5-lmd=4.0": "beta_prior_m=0.5-lmd=4.0/checkpoints/epoch=199-val_loss=-39.6821.ckpt",
+            "joint": "dist=Student-t-param=1-beta_prior_m=0.5-lmd=4.0/checkpoints/last.ckpt"
         },
     },
     "chime6": {
@@ -40,8 +42,9 @@ DATASETS = {
             # "Gaussian": "dist=Gaussian-param=2/checkpoints/epoch=199-val_loss=-23.2146.ckpt",
             # "Student-t_0.1": "dist=Student-t-param=0.1/checkpoints/epoch=197-val_loss=7.7501.ckpt",
             # "Student-t_1.0": "dist=Student-t-param=1.0/checkpoints/epoch=199-val_loss=-8.7330.ckpt",
-            "beta_prior_m=0.3-lmd=4.0": "beta_prior_m=0.3-lmd=4.0/checkpoints/epoch=194-val_loss=-23.0167.ckpt",
-            "beta_prior_m=0.5-lmd=4.0": "beta_prior_m=0.5-lmd=4.0/checkpoints/epoch=186-val_loss=-23.0583.ckpt"
+            # "beta_prior_m=0.3-lmd=4.0": "beta_prior_m=0.3-lmd=4.0/checkpoints/epoch=194-val_loss=-23.0167.ckpt",
+            # "beta_prior_m=0.5-lmd=4.0": "beta_prior_m=0.5-lmd=4.0/checkpoints/epoch=186-val_loss=-23.0583.ckpt",
+            "joint": "dist=Student-t-param=1-beta_prior_m=0.5-lmd=4.0/checkpoints/last.ckpt"
         }
     },
 }
@@ -120,7 +123,7 @@ def main(train_dataset, test_dataset, ckpt_path):
 
 
 if __name__ == "__main__":
-    train_test_pairs = [(train_dataset, test_dataset) for train_dataset, test_dataset in product(DATASETS.keys(), repeat=2) if (train_dataset == "ami")]
+    train_test_pairs = [(train_dataset, test_dataset) for train_dataset, test_dataset in product(DATASETS.keys(), repeat=2)]
     print(train_test_pairs)
     for train_dataset, test_dataset in train_test_pairs:
         for ckpt_label, ckpt_path_suffix in DATASETS[train_dataset]["ckpts"].items():
