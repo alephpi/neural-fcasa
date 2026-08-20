@@ -1,0 +1,7 @@
+defaults:
+  - global
+  - datamodule: default
+  - model: default
+  - trainer: default
+  - trainer/callbacks: default
+  - trainer/logger: tensorboard

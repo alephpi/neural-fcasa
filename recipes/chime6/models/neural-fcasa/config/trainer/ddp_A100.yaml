@@ -1,0 +1,6 @@
+defaults:
+  - ddp
+  - _self_
+
+devices: 3
+num_nodes: 4

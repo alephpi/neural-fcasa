@@ -178,3 +178,4 @@ test*
 recipes/ami/jobs*
 .hydra
 outputs
+recipes/crosstest/eval

@@ -15,7 +15,7 @@ from neural_fcasa.nn import (
     SpatialPositionalEncoding,
     TACModule,
 )
-from neural_fcasa.utils.distributions import ApproxBernoulli
+from neural_fcasa.utils.distributions import ApproxBernoulli, BetaPERT
 
 
 class RESepFormerBlock(nn.Module):
@@ -136,9 +136,12 @@ class ReSepFormerModule(nn.Module):
         if h0 is None:
             h0 = torch.zeros_like(h)
 
-        with torch.autocast("cuda", dtype=torch.float16, enabled=self.autocast):
-            h = self.enc(self.lin1(torch.concat((h, h0), dim=-1)))
-        h = h.to(torch.float32)
+        # with torch.autocast("cuda", dtype=torch.bfloat16, enabled=self.autocast):
+        h = self.enc(self.lin1(torch.concat((h, h0), dim=-1)))
+        # h = h.to(torch.float32)
+
+        if torch.isnan(h).sum() > 0:
+            raise ValueError(f"NaN found in h:\n{h=}\n{logx=}")
 
         return h + h0, self.head_r(self.overlapped_add(h, T))
 
@@ -164,6 +167,7 @@ class RESepFormerEncoder(nn.Module):
         autocast: bool = True,
         use_jit: bool = True,
         spec_aug: nn.Module | None = None,
+        beta_prior: bool = False,
     ):
         super().__init__()
 
@@ -172,6 +176,7 @@ class RESepFormerEncoder(nn.Module):
         self.n_blocks = n_blocks
 
         self.tau = tau
+        self.beta_prior = beta_prior
 
         self.tf = nn.ModuleList()
         for _ in range(n_blocks):
@@ -204,12 +209,20 @@ class RESepFormerEncoder(nn.Module):
             Rearrange("(b m) t (c d) -> c b d m t", m=n_mic, c=2, d=dim_latent),
         )
 
-        self.head_w_val = nn.Sequential(
-            nn.Linear(d_model, d_model),
-            nn.PReLU(),
-            nn.Linear(d_model, 1),
-            Rearrange("(b m) t 1 -> b m t", m=n_mic),
-        )
+        if self.beta_prior:
+            self.head_w_val = nn.Sequential(
+                nn.Linear(d_model, d_model),
+                nn.PReLU(),
+                nn.Linear(d_model, 2),
+                Rearrange("(b m) t c -> c b m t", m=n_mic, c=2),
+            )
+        else:
+            self.head_w_val = nn.Sequential(
+                nn.Linear(d_model, d_model),
+                nn.PReLU(),
+                nn.Linear(d_model, 1),
+                Rearrange("(b m) t 1 -> b m t", m=n_mic),
+            )
 
         self.head_zw_att = nn.Sequential(
             nn.Linear(d_model, d_model),
@@ -242,20 +255,43 @@ class RESepFormerEncoder(nn.Module):
 
         h = self.overlapped_add(h, T)
 
-        zw_att = self.head_zw_att(h)  # [B, D, N, T]
+        # an explicit layer to make z and w correlate, as both z and w are the projection of zw_att
+        zw_att = self.head_zw_att(h)  # [B,M,N]
 
         # z
-        z_mu_, z_sig_ = self.head_z_val(h)  # [B, D, N, T]
+        z_mu_, z_sig_ = self.head_z_val(h)  # [B,D,M,T]
+        if self.beta_prior:
+            # w, mode m and concentration lambda
+            w_m_, w_lmd_ = self.head_w_val(h) # [B,M,T]
+        else:
+            w_logits_ = self.head_w_val(h) # [B,M,T]
 
-        z_mu: torch.Tensor = torch.einsum("bmn,bdmt->bdnt", zw_att, z_mu_)
-        w_logits = torch.einsum("bmn,bmt->bnt", zw_att, self.head_w_val(h))
+        ## merge along microphone to revert the source
+        z_mu: torch.Tensor = torch.einsum("bmn,bdmt->bdnt", zw_att, z_mu_) # [B,D,N,T]
+        assert torch.isnan(z_mu).sum() == 0, f"{z_mu=}\n{zw_att=}\n{z_mu_=}\n{h=}\n{x=}"
+
+        if self.beta_prior:
+            w_m = torch.sigmoid(torch.einsum("bmn,bmt->bnt", zw_att, w_m_)) # [B,N,T]
+        else:
+            w_logits = torch.einsum("bmn,bmt->bnt", zw_att, w_logits_) # [B,N,T]
+
+
+        # we should mimic w_logits inference to get shape parameters \alpha and \beta for our Beta distribution
 
         if distribution:
-            qz = Normal(z_mu, fn.softplus(torch.einsum("bmn,bdmt->bdnt", zw_att, z_sig_)) + 1e-6)
-            qw = ApproxBernoulli(logits=w_logits, temperature=torch.full_like(w_logits, self.tau))
+            z_sig = fn.softplus(torch.einsum("bmn,bdmt->bdnt", zw_att, z_sig_)) + 1e-6 # [B,D,N,T]
+            qz = Normal(z_mu, z_sig)
+            if self.beta_prior:
+                w_lmd = fn.softplus(torch.einsum("bmn,bmt->bnt", zw_att, w_lmd_)) + 1e-6 # [B,N,T]
+                qw = BetaPERT(w_m, w_lmd)
+            else:
+                qw = ApproxBernoulli(logits=w_logits, temperature=torch.full_like(w_logits, self.tau))
         else:
             qz = z_mu
-            qw = logits_to_probs(w_logits, is_binary=True)
+            if self.beta_prior:
+                qw = w_m
+            else:
+                qw = logits_to_probs(w_logits, is_binary=True)
 
         # g
         g: torch.Tensor = self.head_g(h) + 1e-6  # type: ignore

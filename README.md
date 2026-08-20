@@ -1,3 +1,12 @@
+This is the official repository of two papers:
+
+- Neural Multichannel Distant Speaker Diarization and Source Separation with Beta Speaker Activity Prior (interspeech 2026)
+- Neural Multichannel Distant Speaker Diarization with Heavy-tailed Source Separation Model (under review)
+
+The repository contains the training and inference code for the two papers. We will release the pre-trained models later.
+
+The repository is a fork of the baseline model neural FCASA. The following is the original README of neural FCASA.
+
 <div align="center"><img src="https://raw.githubusercontent.com/b-sigpro/neural-fcasa/main/docs/image/logo.png" width="600"/></div>
 
 

@@ -11,13 +11,13 @@ defaults:
 
 datamodule:
   batch_size: 16
-  cached: true
+  keep_in_memory: false
 
 trainer:
   num_nodes: 1
-  devices: 2
-  accumulate_grad_batches: 4
-  max_epochs: 200
+  devices: 4
+  accumulate_grad_batches: 2
+  max_epochs: 400
 
 hydra:
   launcher:
@@ -28,6 +28,10 @@ hydra:
     exclude: nodeaudible01
     gpus_per_node: ${trainer.devices}
     cpus_per_task: 16
-    tasks_per_node: 2
-    mem_gb: 720
-    timeout_min: 4000
+    tasks_per_node: ${trainer.devices}
+    mem_gb: 500
+    timeout_min: 1440
+    setup:
+      - source /home/ids/smao-22/phd/neural-fcasa/.venv/bin/activate
+
+ckpt_path: '/home/ids/smao-22/phd/neural-fcasa/recipes/ami/models/neural-fcasa/outputs/beta_prior_m=0.5-lmd=10/2026-02-03_10-18-18/0/checkpoints/last.ckpt'

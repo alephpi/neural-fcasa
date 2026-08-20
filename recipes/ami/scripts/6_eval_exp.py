@@ -82,24 +82,41 @@ if __name__ == "__main__":
     #     "Student-t_100": "dist=Student-t-param=100/2025-09-03_08-31-17/0"
     # }
 
+    # CKPT_PATH_DICT = {
+    #     "Leptokurtic_0.4": "dist=Leptokurtic-param=0.4/2025-09-11_18-51-11/0",
+    #     "Leptokurtic_0.8": "dist=Leptokurtic-param=0.8/2025-09-11_18-51-11/0",
+    #     "Leptokurtic_1": "dist=Leptokurtic-param=1/2025-09-11_18-51-10/0",
+    #     "Leptokurtic_1.2": "dist=Leptokurtic-param=1.2/2025-09-11_18-51-10/0",
+    #     "Leptokurtic_1.6": "dist=Leptokurtic-param=1.6/2025-09-11_18-51-10/0",
+    #     "Student-t_0.1": "dist=Student-t-param=0.1/2025-09-11_18-51-11/0",
+    #     "Student-t_1": "dist=Student-t-param=1/2025-09-11_18-51-11/0",
+    #     "Student-t_10": "dist=Student-t-param=10/2025-09-11_18-51-10/0",
+    #     "Student-t_100": "dist=Student-t-param=100/2025-09-11_18-51-11/0"
+    # }
+
     CKPT_PATH_DICT = {
-        "Leptokurtic_0.4": "dist=Leptokurtic-param=0.4/2025-09-11_18-51-11/0",
-        "Leptokurtic_0.8": "dist=Leptokurtic-param=0.8/2025-09-11_18-51-11/0",
-        "Leptokurtic_1": "dist=Leptokurtic-param=1/2025-09-11_18-51-10/0",
-        "Leptokurtic_1.2": "dist=Leptokurtic-param=1.2/2025-09-11_18-51-10/0",
-        "Leptokurtic_1.6": "dist=Leptokurtic-param=1.6/2025-09-11_18-51-10/0",
-        "Student-t_0.1": "dist=Student-t-param=0.1/2025-09-11_18-51-11/0",
-        "Student-t_1": "dist=Student-t-param=1/2025-09-11_18-51-11/0",
-        "Student-t_10": "dist=Student-t-param=10/2025-09-11_18-51-10/0",
-        "Student-t_100": "dist=Student-t-param=100/2025-09-11_18-51-11/0"
+        # "Gaussian": "dist=Gaussian-param=None/2025-11-24_18-16-56/0",
+        # "Gaussian": "dist=Gaussian-param=None/2026-01-07_21-21-51/0",
+        # "Gaussian": "dist=Gaussian-param=None/2026-01-11_10-00-58/0",
+        # "Gaussian": "dist=Gaussian-param=None/2026-01-13_21-06-19/0",
+        # "Gaussian": "dist=Gaussian-param=None/2026-01-16_18-37-27/0",
+        # "Gaussian": "dist=Gaussian-param=None/2026-01-15_16-55-41/0",
+        # "Gaussian": "dist=Gaussian-param=None/2026-01-17_19-32-32/0",
+        # "Gaussian": "dist=Gaussian-param=None/2026-01-20_09-41-18/0",
+        # "Gaussian": "dist=Gaussian-param=None/2026-01-21_08-52-38/0",
+        # "beta_0.7_4": "beta_prior_m=0.7-lmd=4/2026-01-31_21-47-30/0",
+        # "beta_0.3_4": "beta_prior_m=0.3-lmd=4/2026-02-02_11-26-06/0",
+        "beta_0.5_10": "beta_prior_m=0.5-lmd=10/2026-02-04_10-41-13/0",
     }
 
-    dst_dir_prefix =ROOT_DIR / "recipes/ami/processed_data/tt/new_eval"
+
+    dst_dir_prefix =ROOT_DIR / "recipes/ami/processed_data/tt/new_eval8"
     ckpt_path_prefix = ROOT_DIR / "recipes/ami/models/neural-fcasa/outputs"
     for name, ckpt_path_suffix in CKPT_PATH_DICT.items():
         cfg_path = ckpt_path_prefix / ckpt_path_suffix / ".hydra" / "config.yaml"
         ckpt_path_dir = ckpt_path_prefix / ckpt_path_suffix / "checkpoints"
         ckpt_paths = [p for p in ckpt_path_dir.glob("*.ckpt")]
+        ckpt_paths = [Path("/home/ids/smao-22/phd/neural-fcasa/recipes/ami/models/neural-fcasa/outputs/beta_prior_m=0.5-lmd=10/2026-02-04_10-41-13/0/checkpoints/epoch=198-val_loss=-33.7312.ckpt")]
         for ckpt_path in ckpt_paths:
             dst_dir = dst_dir_prefix / name / ckpt_path.stem / "diar"
             sep_diar(cfg_path, ckpt_path, dst_dir)

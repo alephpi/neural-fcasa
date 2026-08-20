@@ -31,7 +31,8 @@ dependencies = [
     "pyannote.audio",
     "pyannote.core",
     "pyannote.data",
-    "confidence_intervals"
+    "confidence_intervals",
+    "datasets"
 ]
 
 [project.optional-dependencies]
