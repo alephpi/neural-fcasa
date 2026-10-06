@@ -1,10 +1,13 @@
-from pathlib import Path
-import pickle
+import argparse
+import multiprocessing as mp
 import os
-from tqdm import tqdm
+import pickle
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-import argparse
+from tqdm import tqdm
+
 
 def diar2rttm(diar_dir: Path, rttm_dir: Path):
 
@@ -88,8 +91,8 @@ def count_sca(sys_rttm, ref_rttm):
 
 
 def compute_sca(sys_rttm_dir: Path, ref_rttm_dir: Path):
-    from pyannote.database.util import load_rttm
     from confidence_intervals import evaluate_with_conf_int
+    from pyannote.database.util import load_rttm
 
     sys_res = []
     ref_res = []
@@ -117,23 +120,24 @@ def compute_sca(sys_rttm_dir: Path, ref_rttm_dir: Path):
     res = evaluate_with_conf_int(np.array(sys_res), sca_score, np.array(ref_res))
     return res
 
-def compute_der(ref_rttms_dir: Path, sys_rttms_dir: Path):
-    """
-    Returns:
-        dict: each file's DER score and global average DER
-    """
-    
-    from pyannote.core import Timeline, Segment, Annotation
-    from pyannote.metrics.diarization import DiarizationErrorRate, JaccardErrorRate
+def _detailed(der) -> list[float]:
+    if der['total'] == 0: # possible when measuring der fair without overlap
+        return [np.nan] * 4
+    miss = der['missed detection'] / der['total']
+    fa = der['false alarm'] / der['total']
+    confusion = der['confusion'] / der['total']
+    der_ = der['diarization error rate']
+    return [miss, fa, confusion, der_]
+
+
+def _eval_one(args: tuple[Path, Path]):
+    """Compute DER/JER of a single file. Returns None if the reference has no speech."""
+    from pyannote.core import Annotation, Segment, Timeline
     from pyannote.database.util import load_rttm
-    # from confidence_intervals import get_bootstrap_indices, get_conf_int
-    
-    ref_rttms = list(ref_rttms_dir.glob("*.rttm"))
-    sys_rttms = list(sys_rttms_dir.glob("*.rttm"))
-    if len(ref_rttms) != len(sys_rttms):
-        print(f"Warning: reference and system rttm file number mismatch, use a subset of ref rttms, ignore {len(ref_rttms) - len(sys_rttms)} files")
-        ref_rttms = [rttm for rttm in ref_rttms if (sys_rttms_dir / rttm.name).exists()]
-    
+    from pyannote.metrics.diarization import DiarizationErrorRate, JaccardErrorRate
+
+    ref_rttm, sys_rttm = args
+
     der_metrics: dict[str, DiarizationErrorRate] = {
                 'der_fair_without_overlap': DiarizationErrorRate(collar=0.25, skip_overlap=True), 
                 'der_fair': DiarizationErrorRate(collar=0.25, skip_overlap=False),
@@ -147,57 +151,76 @@ def compute_der(ref_rttms_dir: Path, sys_rttms_dir: Path):
                 'jer_full': JaccardErrorRate(collar=0, skip_overlap=False),
                 'jer_full_overlap_only': JaccardErrorRate(collar=0, skip_overlap=False),
                 }
-    
-    der_metrics_result = {key: [np.nan, np.nan, np.nan, np.nan] for key in der_metrics.keys()}
-    der_metrics_results = {key: [] for key in der_metrics.keys()}
-    jer_metrics_result = {key: np.nan for key in jer_metrics.keys()}
-    jer_metrics_results = {key: [] for key in jer_metrics.keys()}
 
-    def detailed(der) -> list[float]:
-        if der['total'] == 0: # possible when measuring der fair without overlap
-            return [0, 0, 0, 0]
-        miss = der['missed detection'] / der['total']
-        fa = der['false alarm'] / der['total']
-        confusion = der['confusion'] / der['total']
-        der_ = der['diarization error rate']
-        return [miss, fa, confusion, der_]
+    uri = ref_rttm.stem
+    reference: Annotation = load_rttm(ref_rttm).get(uri, None)
+    hypothesis: Annotation = load_rttm(sys_rttm).get(uri, None)
+    if not reference:
+        # if reference contains no speech, skip it
+        return None
+    uem = Timeline([Segment(0, 10)], uri=uri)
+    uem_overlap_only = reference.get_overlap()
+    empty_hyp = not hypothesis
+    if empty_hyp:
+        hypothesis = Annotation(uri=uri)
 
-    for ref_rttm in tqdm(ref_rttms):
-        uri = ref_rttm.stem
-        sys_rttm = sys_rttms_dir / ref_rttm.name
-        reference: Annotation = load_rttm(ref_rttm).get(uri, None)
-        hypothesis: Annotation = load_rttm(sys_rttm).get(uri, None)
-        if not reference:
-            # if reference contains no speech, skip it
-            continue
+    der_res: dict[str, list[float]] = {}
+    for key, der_metric in der_metrics.items():
+        if key.endswith('overlap_only'):
+            if not uem_overlap_only:
+                continue # no overlap in this file, metric undefined
+            key_uem = uem_overlap_only
         else:
-            uem = Timeline([Segment(0, 10)], uri=uri)
-            uem_overlap_only = reference.get_overlap()
-            if not hypothesis:
-                # always miss, der == 1
-                for key in der_metrics.keys():
-                    der_metrics_result[key] = [1,0,0,1]
-            else:
-                for key in der_metrics.keys():
-                    der_metric = der_metrics[key]
-                    if key.endswith('overlap_only') and uem_overlap_only:
-                        der_metrics_result[key] = detailed(der_metric(reference, hypothesis, uem=uem_overlap_only, detailed=True))
-                    else:
-                        der_metrics_result[key] = detailed(der_metric(reference, hypothesis, uem=uem, detailed=True))
+            key_uem = uem
+        der_res[key] = _detailed(der_metric(reference, hypothesis, uem=key_uem, detailed=True))
 
-                    der_metrics_results[key].append(der_metrics_result[key])
+    jer_res: dict[str, float] = {}
+    for key, jer_metric in jer_metrics.items():
+        if key.endswith('overlap_only'):
+            if not uem_overlap_only:
+                continue
+            key_uem = uem_overlap_only
+        else:
+            key_uem = uem
+        if empty_hyp:
+            jer_res[key] = 1.0 # every reference speaker is missed
+            continue
+        try:
+            jer_res[key] = jer_metric(reference, hypothesis, uem=key_uem, detailed=False) # type: ignore
+        except ZeroDivisionError:
+            jer_res[key] = np.nan
 
-                for key in jer_metrics.keys():
-                    jer_metric = jer_metrics[key]
-                    if key.endswith('overlap_only') and uem_overlap_only:
-                        jer_metrics_result[key] = jer_metric(reference, hypothesis, uem=uem_overlap_only, detailed=False) # type: ignore
-                    else:
-                        try:
-                            jer_metrics_result[key] = jer_metric(reference, hypothesis, uem=uem, detailed=False) # type: ignore
-                        except ZeroDivisionError:
-                            jer_metrics_result[key] = np.nan
+    return der_res, jer_res
 
-                    jer_metrics_results[key].append(jer_metrics_result[key])
+
+def compute_der(ref_rttms_dir: Path, sys_rttms_dir: Path, num_workers: int = 8):
+    """
+    Returns:
+        dict: each file's DER score and global average DER
+    """
+    ref_rttms = list(ref_rttms_dir.glob("*.rttm"))
+    sys_rttms = list(sys_rttms_dir.glob("*.rttm"))
+    if len(ref_rttms) != len(sys_rttms):
+        raise ValueError("reference and system rttm file number mismatch")
+
+    tasks = [(ref_rttm, sys_rttms_dir / ref_rttm.name) for ref_rttm in ref_rttms]
+    if num_workers > 1:
+        with mp.Pool(num_workers) as pool:
+            results = list(tqdm(pool.imap_unordered(_eval_one, tasks, chunksize=4), total=len(tasks)))
+    else:
+        results = [_eval_one(task) for task in tqdm(tasks)]
+
+    der_keys = ['der_fair_without_overlap', 'der_fair', 'der_full', 'der_full_overlap_only']
+    jer_keys = ['jer_fair_without_overlap', 'jer_fair', 'jer_full', 'jer_full_overlap_only']
+    der_metrics_results = {key: [] for key in der_keys}
+    jer_metrics_results = {key: [] for key in jer_keys}
+    for res in results:
+        if res is None:
+            continue
+        for key, value in res[0].items():
+            der_metrics_results[key].append(value)
+        for key, value in res[1].items():
+            jer_metrics_results[key].append(value)
 
     # der_metrics_results = {key: np.array(value) for key, value in der_metrics_results.items()}
     der_metrics_results_mean = {key: np.nanmean(value, 0) for key, value in der_metrics_results.items()}
@@ -227,6 +250,7 @@ if __name__ == "__main__":
     parser.add_argument("--ref_rttm_dir", type=str, default=None,help="reference label rttm")
     parser.add_argument("--sys_rttm_dir", type=str, help="system rttm directory")
     parser.add_argument("--diar_dir", type=str, help="system diar directory")
+    parser.add_argument("--num_workers", type=int, default=16, help="number of worker processes for DER/JER")
     args = parser.parse_args()
 
     ref_rttm_dir = Path(args.ref_rttm_dir)
@@ -242,15 +266,17 @@ if __name__ == "__main__":
     # sca, (sca_lower, sca_upper) = compute_sca(sys_rttm_dir, ref_rttm_dir)
     # print(sca, sca_lower-sca, sca_upper-sca)
 
-    der, jer = compute_der(ref_rttm_dir, sys_rttm_dir)
+    der, jer = compute_der(ref_rttm_dir, sys_rttm_dir, args.num_workers)
     print("---der---")
-    der = pd.DataFrame.from_dict(der, orient='index', columns=['miss', 'fa', 'confusion', 'der'])
-    der.index.name = "metric"
-    print(der.to_csv())
+    der_df: pd.DataFrame = pd.DataFrame.from_dict(der, orient='index', columns=['miss', 'fa', 'confusion', 'der'])
+    der_df.index.name = "metric"
+    der_df *= 100
+    print(der_df.to_csv(sep="\t", float_format="%.2f"))
     print("---jer---")
-    jer = pd.DataFrame.from_dict(jer, orient='index', columns=['jer'])
-    jer.index.name = "metric"
-    print(jer.to_csv())
+    jer_df = pd.DataFrame.from_dict(jer, orient='index', columns=['jer'])
+    jer_df.index.name = "metric"
+    jer_df *= 100
+    print(jer_df.to_csv(sep="\t", float_format="%.2f"))
 
     # der, (der_lower, der_upper) = compute_der(ref_rttm_dir, sys_rttm_dir)
     # print(der, der_lower, der_upper)
