@@ -139,17 +139,17 @@ def _eval_one(args: tuple[Path, Path]):
     ref_rttm, sys_rttm = args
 
     der_metrics: dict[str, DiarizationErrorRate] = {
-                'der_fair_without_overlap': DiarizationErrorRate(collar=0.25, skip_overlap=True), 
-                'der_fair': DiarizationErrorRate(collar=0.25, skip_overlap=False),
-                'der_full': DiarizationErrorRate(collar=0, skip_overlap=False),
-                'der_full_overlap_only': DiarizationErrorRate(collar=0, skip_overlap=False),
+                'forgive': DiarizationErrorRate(collar=0.25, skip_overlap=True), 
+                'fair': DiarizationErrorRate(collar=0.25, skip_overlap=False),
+                'full': DiarizationErrorRate(collar=0, skip_overlap=False),
+                'overlap': DiarizationErrorRate(collar=0, skip_overlap=False),
            }
         
     jer_metrics: dict[str, JaccardErrorRate] = { 
-                'jer_fair_without_overlap': JaccardErrorRate(collar=0.25, skip_overlap=True),
-                'jer_fair': JaccardErrorRate(collar=0.25, skip_overlap=False),
-                'jer_full': JaccardErrorRate(collar=0, skip_overlap=False),
-                'jer_full_overlap_only': JaccardErrorRate(collar=0, skip_overlap=False),
+                'forgive': JaccardErrorRate(collar=0.25, skip_overlap=True),
+                'fair': JaccardErrorRate(collar=0.25, skip_overlap=False),
+                'full': JaccardErrorRate(collar=0, skip_overlap=False),
+                'overlap': JaccardErrorRate(collar=0, skip_overlap=False),
                 }
 
     uri = ref_rttm.stem
@@ -166,7 +166,7 @@ def _eval_one(args: tuple[Path, Path]):
 
     der_res: dict[str, list[float]] = {}
     for key, der_metric in der_metrics.items():
-        if key.endswith('overlap_only'):
+        if key == 'overlap':
             if not uem_overlap_only:
                 continue # no overlap in this file, metric undefined
             key_uem = uem_overlap_only
@@ -176,7 +176,7 @@ def _eval_one(args: tuple[Path, Path]):
 
     jer_res: dict[str, float] = {}
     for key, jer_metric in jer_metrics.items():
-        if key.endswith('overlap_only'):
+        if key == 'overlap':
             if not uem_overlap_only:
                 continue
             key_uem = uem_overlap_only
@@ -210,8 +210,8 @@ def compute_der(ref_rttms_dir: Path, sys_rttms_dir: Path, num_workers: int = 8):
     else:
         results = [_eval_one(task) for task in tqdm(tasks)]
 
-    der_keys = ['der_fair_without_overlap', 'der_fair', 'der_full', 'der_full_overlap_only']
-    jer_keys = ['jer_fair_without_overlap', 'jer_fair', 'jer_full', 'jer_full_overlap_only']
+    der_keys = ['forgive', 'fair', 'full', 'overlap']
+    jer_keys = ['forgive', 'fair', 'full', 'overlap']
     der_metrics_results = {key: [] for key in der_keys}
     jer_metrics_results = {key: [] for key in jer_keys}
     for res in results:
@@ -267,16 +267,11 @@ if __name__ == "__main__":
     # print(sca, sca_lower-sca, sca_upper-sca)
 
     der, jer = compute_der(ref_rttm_dir, sys_rttm_dir, args.num_workers)
-    print("---der---")
-    der_df: pd.DataFrame = pd.DataFrame.from_dict(der, orient='index', columns=['miss', 'fa', 'confusion', 'der'])
+    print("---result---")
+    der_df: pd.DataFrame = pd.DataFrame.from_dict(der, orient='index', columns=['miss', 'fa', 'conf', 'der'])
     der_df.index.name = "metric"
-    der_df *= 100
-    print(der_df.to_csv(sep="\t", float_format="%.2f"))
-    print("---jer---")
     jer_df = pd.DataFrame.from_dict(jer, orient='index', columns=['jer'])
     jer_df.index.name = "metric"
-    jer_df *= 100
-    print(jer_df.to_csv(sep="\t", float_format="%.2f"))
-
-    # der, (der_lower, der_upper) = compute_der(ref_rttm_dir, sys_rttm_dir)
-    # print(der, der_lower, der_upper)
+    df = pd.DataFrame.join(der_df, jer_df, how='inner')
+    df *= 100
+    print(df.to_csv(sep="\t", float_format="%.2f"))
